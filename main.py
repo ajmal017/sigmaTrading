@@ -34,6 +34,8 @@ def main():
 
     app = Trader()
     app.connect("localhost", 4001, 1)
+    app.create_option_chain()
+    # app.print_option_chain()
     app.disconnect()
     df = import_option_chain("./data/181105 options.csv")
     print(df.describe())

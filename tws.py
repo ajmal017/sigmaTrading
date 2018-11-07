@@ -4,6 +4,7 @@ TWS Code
 import numpy as np
 import datetime
 from dateutil.relativedelta import relativedelta
+import time
 
 from ibapi.wrapper import *
 from ibapi.client import *
@@ -91,25 +92,29 @@ class Trader(TwsWrapper, TwsClient):
         This method will create instruments for the option chain but will not request data for them
         :return:
         """
-        right = ["PUT", "CALL"]      # We want both puts and calls
-        expiry = [1, 2, 3, 4, 5, 6]  # We want instruments 6 months ahead
-        strike = np.arange(50.0, 90.0, 0.5)
+        right = ["PUT", "CALL"]              # We want both puts and calls
+        expiry = [1, 2, 3, 4, 5, 6]          # We want instruments 6 months ahead
+        strike = np.arange(50.0, 90.0, 0.5)  # Strikes from 50 to 90
 
-        next_id = 0
+        next_id = 10
         for e in expiry:
             for s in strike:
                 for r in right:
                     inst = Contract()
                     inst.symbol = "CL"
+                    inst.secType = "FOP"
                     inst.right = r
                     inst.strike = s
                     inst.exchange = "NYMEX"
+                    inst.tradingClass = "LO"
 
                     exp_date = datetime.datetime.now() + relativedelta(months=+e)
-                    inst.lastTradeDateOrContractMonth = exp_date.strftime("%Y%m")
+                    exp_date = exp_date.strftime("%Y%m")
+                    inst.lastTradeDateOrContractMonth = exp_date
 
-                    self.reqContractDetails(10 + next_id, inst)
-                    self.option_chain.append({"id": next_id, "expiry": e, "strike": s, "right": r})
+                    time.sleep(0.1)  # In order not to exceed TWS capacities we need to wait 100 milliseconds
+                    self.reqContractDetails(next_id, inst)
+                    self.option_chain.append({"id": next_id, "expiry": exp_date, "strike": s, "right": r})
                     next_id += 1
 
     def print_option_chain(self):
@@ -125,16 +130,22 @@ class Trader(TwsWrapper, TwsClient):
         Requesting option chain data from the TWS
         :return: nothing, data comes via wrapper events
         """
-        self.logger.log("Requesting option chain")
+        self.logger.log("Requesting option chain price data")
 
-        inst = Contract()
-        inst.secType = "FOP"
-        inst.exchange = "NYMEX"
-        inst.symbol = "CL"
+        for i in self.option_chain:
+            inst = Contract()
+            inst.secType = "FOP"
+            inst.exchange = "NYMEX"
+            inst.symbol = "CL"
+            inst.tradingClass = "LO"
 
-        self.reqContractDetails(213, inst)
-        # Request a snapshot
-        self.reqMktData(214, inst, "", True, False, [])
+            inst.strike = i.strike
+            inst.lastTradeDateOrContractMonth = i.expiry
+            inst.right = i.right
+
+            # Request a snapshot
+            time.sleep(0.1)
+            self.reqMktData(i.id + 3000, inst, "", True, False, [])
 
 
 if __name__ == "__main__":
