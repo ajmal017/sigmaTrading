@@ -2,7 +2,6 @@
 TWS Code
 """
 import numpy as np
-import datetime
 from dateutil.relativedelta import relativedelta
 import time
 
@@ -26,6 +25,8 @@ class TwsWrapper(EWrapper):
     """
     def __init__(self):
         EWrapper.__init__(self)
+        self.option_chain = {}  # Option chain needs to be stored within wrapper
+        self.logger = Logger(LogLevel.normal, "Wrapper")
 
     def tickPrice(self, req_id: TickerId, tick_type: TickType, price: float, attrib: TickAttrib):
         """
@@ -38,8 +39,18 @@ class TwsWrapper(EWrapper):
         """
 
         super().tickPrice(req_id, tick_type, price, attrib)
-        print("Tick Price. Ticker Id:", req_id, "tick_type:", tick_type, "Price:", price, "CanAutoExecute:",
-              attrib.canAutoExecute, "PastLimit:", attrib.pastLimit, end=' ')
+        self.logger.verbose("Tick Price. Ticker Id:"+str(req_id)+"tick_type:"+str(tick_type)+ "Price:" +
+                            str(price)+"CanAutoExecute:"+str(attrib.canAutoExecute)+"PastLimit:"+
+                            str(attrib.pastLimit))
+
+        # Update bid and ask prices
+        for i, j in enumerate(self.option_chain):
+            if j.id == req_id:
+                if tick_type == TickTypeEnum.ASK:
+                    self.option_chain[i]['ask'] = price
+                if tick_type == TickTypeEnum.BID:
+                    self.option_chain[i]['bid'] = price
+
         if tick_type == TickTypeEnum.BID or tick_type == TickTypeEnum.ASK:
             print("PreOpen:", attrib.preOpen)
         else:
@@ -65,9 +76,19 @@ class TwsWrapper(EWrapper):
 
         super().tickOptionComputation(req_id, tick_type, implied_vol, delta,
                                       opt_price, pv_dividend, gamma, vega, theta, und_price)
-        print("TickOptionComputation. TickerId:", req_id, "tick_type:", tick_type, "ImpliedVolatility:",
-              implied_vol, "Delta:", delta, "OptionPrice:", opt_price, "pvDividend:", pv_dividend, "Gamma: ",
-              gamma, "Vega:", vega, "Theta:", theta, "UnderlyingPrice:", und_price)
+        self.logger.verbose("TickOptionComputation. TickerId:"+str(req_id)+"tick_type:"+str(tick_type) +
+                            "ImpliedVolatility:" +str(implied_vol)+"Delta:"+str(delta)+"OptionPrice:" +
+                            str(opt_price)+"pvDividend:"+str(pv_dividend)+"Gamma: "+str(gamma)+"Vega:" +
+                            str(vega)+"Theta:"+str(theta)+"UnderlyingPrice:"+str(und_price))
+        # Update data for option greeks
+        for i, j in enumerate(self.option_chain):
+            if j.id == req_id:
+                self.option_chain[i]['delta'] = delta
+                self.option_chain[i]['gamma'] = gamma
+                self.option_chain[i]['theta'] = theta
+                self.option_chain[i]['vega'] = vega
+                self.option_chain[i]['sigma'] = implied_vol
+                self.option_chain[i]['ul_price'] = und_price
 
 
 class Trader(TwsWrapper, TwsClient):
@@ -83,9 +104,6 @@ class Trader(TwsWrapper, TwsClient):
 
         self.logger = Logger(LogLevel.normal, "TWS")
         self.logger.log("TWS init")
-
-        # Now create empty list for option chain
-        self.option_chain = []
 
     def create_option_chain(self):
         """
@@ -114,7 +132,7 @@ class Trader(TwsWrapper, TwsClient):
 
                     time.sleep(0.1)  # In order not to exceed TWS capacities we need to wait 100 milliseconds
                     self.reqContractDetails(next_id, inst)
-                    self.option_chain.append({"id": next_id, "expiry": exp_date, "strike": s, "right": r})
+                    self.wrapper.option_chain.append({"id": next_id, "expiry": exp_date, "strike": s, "right": r})
                     next_id += 1
 
     def print_option_chain(self):
@@ -122,7 +140,7 @@ class Trader(TwsWrapper, TwsClient):
         Prints out option chain for debugging reasons
         :return: nothing
         """
-        for o in self.option_chain:
+        for o in self.wrapper.option_chain:
             self.logger.log(o)
 
     def req_option_chain(self):
@@ -132,7 +150,7 @@ class Trader(TwsWrapper, TwsClient):
         """
         self.logger.log("Requesting option chain price data")
 
-        for i in self.option_chain:
+        for i in self.wrapper.option_chain:
             inst = Contract()
             inst.secType = "FOP"
             inst.exchange = "NYMEX"
