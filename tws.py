@@ -45,7 +45,7 @@ class TwsWrapper(EWrapper):
 
         # Update bid and ask prices
         for i, j in enumerate(self.option_chain):
-            if j.id == req_id:
+            if j.id == req_id - 3000:
                 if tick_type == TickTypeEnum.ASK:
                     self.option_chain[i]['ask'] = price
                 if tick_type == TickTypeEnum.BID:
@@ -163,6 +163,8 @@ class Trader(TwsWrapper, TwsClient):
 
             # Request a snapshot
             time.sleep(0.1)
+            self.logger.log("Requesting data for "+inst.symbol+" "+inst.lastTradeDateOrContractMonth +
+                            " "+inst.right+" "+inst.strike)
             self.reqMktData(i.id + 3000, inst, "", True, False, [])
 
 
