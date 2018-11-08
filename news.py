@@ -35,6 +35,7 @@ class TwsWrapper(EWrapper):
         self.logger = Logger(LogLevel.normal, "Wrapper")
         self.logger.log("Wrapper init")
         EWrapper.__init__(self)
+        self.nextValidOrderId = 0
 
         # The settings for the order structure
         # At some later stage this also needs to be dynamic and be set somewhere else
@@ -95,18 +96,51 @@ class TwsWrapper(EWrapper):
         self.short_trail.ocaGroup = "News_Short"
         self.short_trail.transmit = True
 
-    def update_order_prices(self):
+    def nextValidId(self, order_id: int):
         """
-        Updates order prices to current market state
-        :return:
+        Updates the next valid order ID, when called by the API
+        :param order_id: given by the TWS API
+        :return: nothing
         """
-        self.logger.log("Order price update not yet implemented")
+        super().nextValidId(order_id)
+        self.logger.verbose("Setting nextValidOrderId: "+str(order_id))
+        self.nextValidOrderId = order_id
 
     def transmit_orders(self):
         """
         Finalises the orders and transmits them to TWS
         :return:
         """
+        # Update order ids, set parent order ids
+        o = self.nextValidOrderId
+        self.long_entry.orderId = o
+        self.long_tgt.orderId = o + 1
+        self.long_tgt.parentId = self.long_entry.orderId
+        self.long_trail.orderId = o + 2
+        self.long_trail.parentId = self.long_entry.orderId
+
+        self.short_entry.orderId = o + 3
+        self.short_tgt.orderId = o + 4
+        self.short_tgt.parentId = self.short_entry.orderId
+        self.short_trail.orderId = o + 5
+        self.short_trail.parentId = self.short_entry.orderId
+
+        # Update prices
+        self.long_entry.lmtPrice = self.set_price + self.entry_spread
+        self.long_entry.stopPrice = self.set_price + self.entry_spread
+        self.long_tgt.lmtPrice = self.set_price + self.tgt_spread
+        self.long_trail.trailStopPrice = self.set_price - self.trail_spread
+        self.long_trail.lmtPriceOffset = self.trail_spread
+        self.long_trail.auxPrice = self.trail_spread
+
+        self.short_entry.lmtPrice = self.set_price - self.entry_spread
+        self.short_entry.stopPrice = self.set_price - self.entry_spread
+        self.short_tgt.lmtPrice = self.set_price - self.tgt_spread
+        self.short_trail.trailStopPrice = self.set_price + self.trail_spread
+        self.long_trail.lmtPriceOffset = self.trail_spread
+        self.long_trail.auxPrice = self.trail_spread
+
+        # Transmit orders
         self.logger.log("Order transmission not implemented")
 
     def tickPrice(self, req_id: TickerId, tick_type: TickType, price: float, attrib: TickAttrib):
@@ -141,6 +175,13 @@ class Trader(TwsWrapper, TwsClient):
         self.exchange = exchange
         self.sec_type = sec_type
         self.expiry = expiry
+
+    def update_order_prices(self):
+        """
+        Updates order prices to current market state
+        :return:
+        """
+        self.logger.log("Order price update not yet implemented")
 
     def req_data(self):
         """
