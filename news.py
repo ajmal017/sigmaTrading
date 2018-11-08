@@ -3,7 +3,9 @@ News trader implementation in Python
 
 Peeter Meos, 8. November 2018
 """
+from threading import Thread
 from typing import List
+import time
 from ibapi.client import *
 from ibapi.wrapper import *
 from logger import *
@@ -36,7 +38,7 @@ class TwsWrapper(EWrapper):
         self.logger = Logger(LogLevel.normal, "Wrapper")
         self.logger.log("Wrapper init")
         EWrapper.__init__(self)
-        self.nextValidOrderId = 0
+        self.nextValidOrderId = -1
 
         # The settings for the order structure
         # At some later stage this also needs to be dynamic and be set somewhere else
@@ -104,7 +106,7 @@ class TwsWrapper(EWrapper):
         :return: nothing
         """
         super().nextValidId(order_id)
-        self.logger.verbose("Setting nextValidOrderId: "+str(order_id))
+        self.logger.log("Setting nextValidOrderId: "+str(order_id))
         self.nextValidOrderId = order_id
 
     def get_orders(self) -> List[Order]:
@@ -165,8 +167,21 @@ class TwsWrapper(EWrapper):
         :param attrib:
         :return:
         """
+        # super().tickPrice(req_id, tick_type, price, attrib)
         # Here we need to add checking on the price levels and order adjustments.
-        self.logger.log("Price tick data not yet implemented")
+        log_str = "Price tick " + str(TickType) + " : " + str(price)
+        self.logger.log(log_str)
+
+    def error(self, req_id:TickerId, error_code:int, error_string:str):
+        """
+        TWS error reporting
+        :param req_id:
+        :param error_code:
+        :param error_string:
+        :return:
+        """
+        # super().error(req_id, error_code, error_string)
+        self.logger.error(str(req_id) + ":" + str(error_code) + ":" + error_string)
 
 
 class Trader(TwsWrapper, TwsClient):
@@ -182,6 +197,11 @@ class Trader(TwsWrapper, TwsClient):
 
         TwsWrapper.__init__(self)
         TwsClient.__init__(self, wrapper=self)
+
+        self.connect("localhost", 4001, 12)
+        thread = Thread(target=self.run)
+        thread.start()
+        setattr(self, "_thread", thread)
 
         # Instrument to be traded.
         self.inst = symbol
@@ -208,10 +228,12 @@ class Trader(TwsWrapper, TwsClient):
         cont.symbol = self.inst
         cont.exchange = self.exchange
         cont.secType = self.sec_type
+        cont.currency = "USD"
         cont.lastTradeDateOrContractMonth = self.expiry
 
         self.logger.log("Requesting market data for the instrument")
-        self.reqMktData(1, cont, "", False, False, [])
+        self.reqContractDetails(2, cont)
+        self.reqMktData(3, cont, "", True, False, [])
 
     def place_orders(self):
         """
@@ -244,9 +266,9 @@ def main():
     logger.log("News trader init")
 
     trader = Trader("CL", "201812", "FUT", "NYMEX")
-    trader.connect("localhost", 4001, 12)
     trader.req_data()
-    trader.trade()
+    time.sleep(60)
+    # trader.trade()
     trader.disconnect()
 
     logger.log("News trader exiting")
