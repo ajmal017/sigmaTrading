@@ -120,6 +120,9 @@ class TwsWrapper(EWrapper):
         Finalises the orders and transmits them to TWS
         :return:
         """
+        if self.last_price <= 0:
+            return
+
         # Update order ids, set parent order ids
         o = self.nextValidOrderId
         self.long_entry.orderId = o
@@ -150,6 +153,7 @@ class TwsWrapper(EWrapper):
         self.long_trail.auxPrice = self.trail_spread
 
         # Transmit orders
+        self.set_price = self.last_price
         self.logger.log("Order transmission not implemented")
 
     def tickPrice(self, req_id: TickerId, tick_type: TickType, price: float, attrib: TickAttrib):
@@ -224,6 +228,8 @@ class Trader(TwsWrapper, TwsClient):
         Main trading loop
         :return: nothing
         """
+        self.logger.log("Setting up orders")
+        self.transmit_orders()
         self.logger.log("Entering main trading loop")
         self.logger.log("Shutting down main trading loop")
 
