@@ -3,6 +3,7 @@ News trader implementation in Python
 
 Peeter Meos, 8. November 2018
 """
+from typing import List
 from ibapi.client import *
 from ibapi.wrapper import *
 from logger import *
@@ -57,7 +58,7 @@ class TwsWrapper(EWrapper):
         self.short_trail = Order()
 
         # Long entry
-        self.long_entry = "BUY"
+        self.long_entry.action = "BUY"
         self.long_entry.orderType = "STP LMT"
         self.long_entry.totalQuantity = self.q
         self.long_entry.transmit = False
@@ -105,6 +106,14 @@ class TwsWrapper(EWrapper):
         super().nextValidId(order_id)
         self.logger.verbose("Setting nextValidOrderId: "+str(order_id))
         self.nextValidOrderId = order_id
+
+    def get_orders(self) -> List[Order]:
+        """
+        Returns orders as a list
+        :return: list of orders
+        """
+        return [self.long_entry, self.long_tgt, self.long_trail,
+                self.short_entry, self.short_tgt, self.short_trail]
 
     def transmit_orders(self):
         """
@@ -181,7 +190,10 @@ class Trader(TwsWrapper, TwsClient):
         Updates order prices to current market state
         :return:
         """
-        self.logger.log("Order price update not yet implemented")
+        self.logger.log("Updating order prices")
+        orders = self.get_orders()
+        for i in range(0, 5):
+            self.placeOrder(orders[i].orderId, self.inst, orders[i])
 
     def req_data(self):
         """
@@ -196,6 +208,16 @@ class Trader(TwsWrapper, TwsClient):
 
         self.logger.log("Requesting market data for the instrument")
         self.reqMktData(1, cont, "", False, False, [])
+
+    def place_orders(self):
+        """
+        Opens orders
+        :return:
+        """
+        self.logger.log("Placing news trader orders")
+        orders = self.get_orders()
+        for i in range(0, 5):
+            self.placeOrder(orders[i].orderId, self.inst, orders[i])
 
     def trade(self):
         """
