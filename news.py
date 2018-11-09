@@ -90,7 +90,7 @@ class TwsWrapper(EWrapper):
         self.long_trail.orderType = "TRAIL"
         self.long_trail.totalQuantity = self.q
         self.long_trail.ocaGroup = "News_Long"
-        self.long_trail.transmit = True
+        self.long_trail.transmit = False  # Should be true
 
         # Short entry
         self.short_entry.action = "SELL"
@@ -110,7 +110,7 @@ class TwsWrapper(EWrapper):
         self.short_trail.orderType = "TRAIL"
         self.short_trail.totalQuantity = self.q
         self.short_trail.ocaGroup = "News_Short"
-        self.short_trail.transmit = True
+        self.short_trail.transmit = False  # Should be true
 
     def nextValidId(self, order_id: int):
         """
@@ -120,7 +120,7 @@ class TwsWrapper(EWrapper):
         """
         super().nextValidId(order_id)
         self.logger.log("Setting nextValidOrderId: "+str(order_id))
-        self.nextValidOrderId = order_id
+        self.nextValidOrderId = int(order_id)
 
     def get_orders(self) -> List[Order]:
         """
@@ -130,7 +130,7 @@ class TwsWrapper(EWrapper):
         return [self.long_entry, self.long_tgt, self.long_trail,
                 self.short_entry, self.short_tgt, self.short_trail]
 
-    def transmit_orders(self):
+    def prepare_orders(self):
         """
         Finalises the orders and transmits them to TWS
         :return:
@@ -140,25 +140,19 @@ class TwsWrapper(EWrapper):
 
         # Update order ids, set parent order ids
         o = self.nextValidOrderId
-        self.long_entry.orderId = o
 
         # Populate orders
-        self.long_tgt.orderId = o + 1
-        self.long_tgt.parentId = self.long_entry.orderId
-        self.long_trail.orderId = o + 2
-        self.long_trail.parentId = self.long_entry.orderId
+        self.long_entry.orderId = str(o)
+        self.long_tgt.orderId = str(o + 1)
+        self.long_tgt.parentId = str(self.long_entry.orderId)
+        self.long_trail.orderId = str(o + 2)
+        self.long_trail.parentId = str(self.long_entry.orderId)
 
-        self.short_entry.orderId = o + 3
-        self.short_tgt.orderId = o + 4
-        self.short_tgt.parentId = self.short_entry.orderId
-        self.short_trail.orderId = o + 5
-        self.short_trail.parentId = self.short_entry.orderId
-
-        # Update prices
-        self.wrapper_price_update(self.last_price)
-
-        # Transmit orders
-        self.logger.log("Order transmission not implemented")
+        self.short_entry.orderId = str(o + 3)
+        self.short_tgt.orderId = str(o + 4)
+        self.short_tgt.parentId = str(self.short_entry.orderId)
+        self.short_trail.orderId = str(o + 5)
+        self.short_trail.parentId = str(self.short_entry.orderId)
 
     def wrapper_price_update(self, set_price):
         """
@@ -166,20 +160,21 @@ class TwsWrapper(EWrapper):
         :param set_price:
         :return:
         """
+        self.logger.log("Setting order structure around price " + str(set_price))
         self.set_price = set_price
         self.long_entry.lmtPrice = set_price + self.entry_spread
-        self.long_entry.stopPrice = set_price + self.entry_spread
+        self.long_entry.auxPrice = set_price + self.entry_spread
         self.long_tgt.lmtPrice = set_price + self.tgt_spread
         self.long_trail.trailStopPrice = set_price - self.trail_spread
         self.long_trail.lmtPriceOffset = self.trail_spread
         self.long_trail.auxPrice = self.trail_spread
 
         self.short_entry.lmtPrice = set_price - self.entry_spread
-        self.short_entry.stopPrice = set_price - self.entry_spread
+        self.short_entry.auxPrice = set_price - self.entry_spread
         self.short_tgt.lmtPrice = set_price - self.tgt_spread
         self.short_trail.trailStopPrice = set_price + self.trail_spread
-        self.long_trail.lmtPriceOffset = self.trail_spread
-        self.long_trail.auxPrice = self.trail_spread
+        self.short_trail.lmtPriceOffset = self.trail_spread
+        self.short_trail.auxPrice = self.trail_spread
 
     def tickPrice(self, req_id: TickerId, tick_type: TickType, price: float, attrib: TickAttrib):
         """
@@ -194,9 +189,9 @@ class TwsWrapper(EWrapper):
         # Here we need to add checking on the price levels and order adjustments.
         log_str = "Price tick " + str(tick_type) + " : " + str(price)
         if tick_type == TickTypeEnum.LAST:
-            self.logger.log("Updating last price")
+            self.logger.log("Updating last price to " + str(price))
             self.last_price = price
-        self.logger.log(log_str)
+        self.logger.verbose(log_str)
 
     def error(self, req_id: TickerId, error_code: int, error_string: str):
         """
@@ -241,6 +236,7 @@ class Trader(TwsWrapper, TwsClient):
             time.sleep(10)
 
         # Instrument to be traded.
+        self.cont = Contract()
         self.inst = symbol
         self.exchange = exchange
         self.sec_type = sec_type
@@ -253,25 +249,23 @@ class Trader(TwsWrapper, TwsClient):
         """
         self.logger.log("Updating order prices")
         self.wrapper_price_update(self.get_last_price())
-        orders = self.get_orders()
-        for i in range(0, 5):
-            self.placeOrder(orders[i].orderId, self.inst, orders[i])
+        for i in self.get_orders():
+            self.placeOrder(i.orderId, self.inst, i)
 
     def req_data(self):
         """
         Requests market data for the instrument
         :return:
         """
-        cont = Contract()
-        cont.symbol = self.inst
-        cont.exchange = self.exchange
-        cont.secType = self.sec_type
-        cont.currency = "USD"
-        cont.lastTradeDateOrContractMonth = self.expiry
+        self.cont.symbol = self.inst
+        self.cont.exchange = self.exchange
+        self.cont.secType = self.sec_type
+        self.cont.currency = "USD"
+        self.cont.lastTradeDateOrContractMonth = self.expiry
 
         self.logger.log("Requesting market data for the instrument")
-        self.reqContractDetails(2, cont)
-        self.reqMktData(3, cont, "", False, False, [])
+        self.reqContractDetails(2, self.cont)
+        self.reqMktData(3, self.cont, "", False, False, [])
 
     def place_orders(self):
         """
@@ -279,9 +273,10 @@ class Trader(TwsWrapper, TwsClient):
         :return:
         """
         self.logger.log("Placing news trader orders")
-        orders = self.get_orders()
-        for i in range(0, 5):
-            self.placeOrder(orders[i].orderId, self.inst, orders[i])
+        for i in self.get_orders():
+            self.logger.log("Placing order " + str(i.orderId))
+            self.placeOrder(i.orderId, self.cont, i)
+        self.status = TraderStatus.HOT
 
     def trade(self):
         """
@@ -289,7 +284,9 @@ class Trader(TwsWrapper, TwsClient):
         :return: nothing
         """
         self.logger.log("Setting up orders")
-        self.transmit_orders()
+        self.prepare_orders()
+        self.wrapper_price_update(self.get_last_price())
+        self.place_orders()
         self.logger.log("Entering main trading loop")
         self.logger.log("Shutting down main trading loop")
 
@@ -315,8 +312,9 @@ def main():
 
     trader = Trader("CL", "201812", "FUT", "NYMEX")
     trader.req_data()
-    time.sleep(60)
-    # trader.trade()
+    time.sleep(6)
+    trader.trade()
+    time.sleep(10)
     trader.stop()
 
     logger.log("News trader exiting")
