@@ -11,6 +11,18 @@ from ibapi.wrapper import *
 from logger import *
 
 
+class TraderStatus(Enum):
+    """
+    Statuses are as follows:
+    COLD - trader is not on the market, no orders
+    HOT - trader is on the market, with orders waiting for execution
+    ACTIVE - at least one of the orders has been executed, we have a nonzero position
+    """
+    COLD = 1
+    HOT = 2
+    ACTIVE = 3
+
+
 class TwsClient(EClient):
     """
     EClient extension for news trader
@@ -42,12 +54,13 @@ class TwsWrapper(EWrapper):
 
         # The settings for the order structure
         # At some later stage this also needs to be dynamic and be set somewhere else
-        self.last_price = -1.0    # Last known price of the instrument
-        self.set_price = -1.0     # The price that the order structure is set at
-        self.entry_spread = 0.05  # Spread for the order structure
-        self.tgt_spread = 0.2     # Target distance
-        self.trail_spread = 0.2   # Trailing stop distance
-        self.q = 1                # Order quantity
+        self.last_price = -1.0              # Last known price of the instrument
+        self.set_price = -1.0               # The price that the order structure is set at
+        self.entry_spread = 0.05            # Spread for the order structure
+        self.tgt_spread = 0.2               # Target distance
+        self.trail_spread = 0.2             # Trailing stop distance
+        self.q = 1                          # Order quantity
+        self.status = TraderStatus.COLD     # Set default trader status
 
         # Initialize orders
         self.logger.log("Initialising the order structure")
@@ -128,6 +141,8 @@ class TwsWrapper(EWrapper):
         # Update order ids, set parent order ids
         o = self.nextValidOrderId
         self.long_entry.orderId = o
+
+        # Populate orders
         self.long_tgt.orderId = o + 1
         self.long_tgt.parentId = self.long_entry.orderId
         self.long_trail.orderId = o + 2
@@ -140,23 +155,31 @@ class TwsWrapper(EWrapper):
         self.short_trail.parentId = self.short_entry.orderId
 
         # Update prices
-        self.long_entry.lmtPrice = self.set_price + self.entry_spread
-        self.long_entry.stopPrice = self.set_price + self.entry_spread
-        self.long_tgt.lmtPrice = self.set_price + self.tgt_spread
-        self.long_trail.trailStopPrice = self.set_price - self.trail_spread
-        self.long_trail.lmtPriceOffset = self.trail_spread
-        self.long_trail.auxPrice = self.trail_spread
-
-        self.short_entry.lmtPrice = self.set_price - self.entry_spread
-        self.short_entry.stopPrice = self.set_price - self.entry_spread
-        self.short_tgt.lmtPrice = self.set_price - self.tgt_spread
-        self.short_trail.trailStopPrice = self.set_price + self.trail_spread
-        self.long_trail.lmtPriceOffset = self.trail_spread
-        self.long_trail.auxPrice = self.trail_spread
+        self.wrapper_price_update(self.last_price)
 
         # Transmit orders
-        self.set_price = self.last_price
         self.logger.log("Order transmission not implemented")
+
+    def wrapper_price_update(self, set_price):
+        """
+        Updates the prices of the order structure
+        :param set_price:
+        :return:
+        """
+        self.set_price = set_price
+        self.long_entry.lmtPrice = set_price + self.entry_spread
+        self.long_entry.stopPrice = set_price + self.entry_spread
+        self.long_tgt.lmtPrice = set_price + self.tgt_spread
+        self.long_trail.trailStopPrice = set_price - self.trail_spread
+        self.long_trail.lmtPriceOffset = self.trail_spread
+        self.long_trail.auxPrice = self.trail_spread
+
+        self.short_entry.lmtPrice = set_price - self.entry_spread
+        self.short_entry.stopPrice = set_price - self.entry_spread
+        self.short_tgt.lmtPrice = set_price - self.tgt_spread
+        self.short_trail.trailStopPrice = set_price + self.trail_spread
+        self.long_trail.lmtPriceOffset = self.trail_spread
+        self.long_trail.auxPrice = self.trail_spread
 
     def tickPrice(self, req_id: TickerId, tick_type: TickType, price: float, attrib: TickAttrib):
         """
@@ -169,10 +192,13 @@ class TwsWrapper(EWrapper):
         """
         # super().tickPrice(req_id, tick_type, price, attrib)
         # Here we need to add checking on the price levels and order adjustments.
-        log_str = "Price tick " + str(TickType) + " : " + str(price)
+        log_str = "Price tick " + str(tick_type) + " : " + str(price)
+        if tick_type == TickTypeEnum.LAST:
+            self.logger.log("Updating last price")
+            self.last_price = price
         self.logger.log(log_str)
 
-    def error(self, req_id:TickerId, error_code:int, error_string:str):
+    def error(self, req_id: TickerId, error_code: int, error_string: str):
         """
         TWS error reporting
         :param req_id:
@@ -182,6 +208,13 @@ class TwsWrapper(EWrapper):
         """
         # super().error(req_id, error_code, error_string)
         self.logger.error(str(req_id) + ":" + str(error_code) + ":" + error_string)
+
+    def get_last_price(self):
+        """
+        Returns last known price of the instrument
+        :return: last price
+        """
+        return self.last_price
 
 
 class Trader(TwsWrapper, TwsClient):
@@ -203,6 +236,10 @@ class Trader(TwsWrapper, TwsClient):
         thread.start()
         setattr(self, "_thread", thread)
 
+        # Wait until we can do stuff
+        while self.nextValidOrderId == -1:
+            time.sleep(10)
+
         # Instrument to be traded.
         self.inst = symbol
         self.exchange = exchange
@@ -215,6 +252,7 @@ class Trader(TwsWrapper, TwsClient):
         :return:
         """
         self.logger.log("Updating order prices")
+        self.wrapper_price_update(self.get_last_price())
         orders = self.get_orders()
         for i in range(0, 5):
             self.placeOrder(orders[i].orderId, self.inst, orders[i])
@@ -233,7 +271,7 @@ class Trader(TwsWrapper, TwsClient):
 
         self.logger.log("Requesting market data for the instrument")
         self.reqContractDetails(2, cont)
-        self.reqMktData(3, cont, "", True, False, [])
+        self.reqMktData(3, cont, "", False, False, [])
 
     def place_orders(self):
         """
@@ -255,6 +293,16 @@ class Trader(TwsWrapper, TwsClient):
         self.logger.log("Entering main trading loop")
         self.logger.log("Shutting down main trading loop")
 
+    def stop(self):
+        """
+        Stops all streaming data, cancels all orders
+        Closes the TWS connection
+        :return:
+        """
+        self.logger.log("Trader closing down")
+        self.cancelMktData(3)
+        self.disconnect()
+
 
 def main():
     """
@@ -269,7 +317,7 @@ def main():
     trader.req_data()
     time.sleep(60)
     # trader.trade()
-    trader.disconnect()
+    trader.stop()
 
     logger.log("News trader exiting")
 
