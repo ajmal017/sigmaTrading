@@ -59,6 +59,8 @@ class TwsWrapper(EWrapper):
         self.entry_spread = 0.05            # Spread for the order structure
         self.tgt_spread = 0.2               # Target distance
         self.trail_spread = 0.2             # Trailing stop distance
+        self.delta_adjust = 0.02            # After how much movement adjust price
+        self.time_adjust = 500              # Time step (ms) for order adjustment
         self.q = 1                          # Order quantity
         self.status = TraderStatus.COLD     # Set default trader status
 
@@ -288,7 +290,23 @@ class Trader(TwsWrapper, TwsClient):
         self.wrapper_price_update(self.get_last_price())
         self.place_orders()
         self.logger.log("Entering main trading loop")
+
+        adj_thread = Thread(target=self.update_loop)
+        adj_thread.start()
+        setattr(self, "_adj_thread", adj_thread)
+
         self.logger.log("Shutting down main trading loop")
+
+    def update_loop(self):
+        """
+        Thread for updating the order structure
+        :return:
+        """
+        while True:
+            time.sleep(self.time_adjust / 1000)
+            if self.status == TraderStatus.HOT and abs(self.set_price - self.last_price) > self.delta_adjust:
+                self.wrapper_price_update(self.last_price)
+                self.place_orders()
 
     def stop(self):
         """
@@ -297,7 +315,15 @@ class Trader(TwsWrapper, TwsClient):
         :return:
         """
         self.logger.log("Trader closing down")
+        # If we have active orders, cancel them
+        if self.status == TraderStatus.HOT:
+            for i in self.get_orders():
+                self.cancelOrder(i.orderId)
+
+        # Stop market data
         self.cancelMktData(3)
+
+        # Disconnect from the API
         self.disconnect()
 
 
