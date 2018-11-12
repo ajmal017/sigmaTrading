@@ -145,12 +145,14 @@ class TwsWrapper(EWrapper):
 
         # Populate orders
         self.long_entry.orderId = str(o)
+        self.long_entry.ocaGroup = "News trader"
         self.long_tgt.orderId = str(o + 1)
         self.long_tgt.parentId = str(self.long_entry.orderId)
         self.long_trail.orderId = str(o + 2)
         self.long_trail.parentId = str(self.long_entry.orderId)
 
         self.short_entry.orderId = str(o + 3)
+        self.short_entry.ocaGroup = "News Trader"
         self.short_tgt.orderId = str(o + 4)
         self.short_tgt.parentId = str(self.short_entry.orderId)
         self.short_trail.orderId = str(o + 5)
@@ -195,6 +197,57 @@ class TwsWrapper(EWrapper):
             self.last_price = price
         self.logger.verbose(log_str)
 
+    def execDetails(self, req_id: int, contract: Contract, execution: Execution):
+        """
+        Execution details processing. Change trade status from HOT to ACTIVE and from
+        ACTIVE to COLD, when either target or trail executes.
+        :param req_id:
+        :param contract:
+        :param execution:
+        :return:
+        """
+        self.logger.verbose("Execution details")
+
+    def execDetailsEnd(self, req_id: int):
+        """
+        End of execution details override
+        :param req_id:
+        :return:
+        """
+        self.logger.verbose("End of execution details")
+
+    def orderStatus(self, order_id: OrderId, status: str, filled: float,
+                    remaining: float, avg_fill_price: float, perm_id: int,
+                    parent_id: int, last_fill_price: float, client_id: int,
+                    why_held: str, mkt_cap_price: float):
+        """
+        Order status processing for trader status changing
+        :param order_id:
+        :param status:
+        :param filled:
+        :param remaining:
+        :param avg_fill_price:
+        :param perm_id:
+        :param parent_id:
+        :param last_fill_price:
+        :param client_id:
+        :param why_held:
+        :param mkt_cap_price:
+        :return:
+        """
+        self.logger.verbose("Order status processing and override")
+        # This part should be covered by OCA grouping on entry orders
+        if order_id == self.long_entry.orderId or order_id == self.short_entry.orderId:
+            self.status = TraderStatus.ACTIVE
+
+        if order_id == self.long_trail.orderId or order_id == self.long_tgt.orderId:
+            self.status = TraderStatus.COLD
+            # Here we should add PnL calculation
+
+        if order_id == self.short_trail.orderId or order_id == self.short_tgt.orderId:
+            self.status = TraderStatus.COLD
+            # Here we should add PnL calculation
+
     def error(self, req_id: TickerId, error_code: int, error_string: str):
         """
         TWS error reporting
@@ -213,12 +266,27 @@ class TwsWrapper(EWrapper):
         """
         return self.last_price
 
+    def set_trader_status(self, status: TraderStatus):
+        """
+        Sets trader status in wrapper
+        :param status:
+        :return:
+        """
+        self.status = status
+
+    def get_trader_status(self) -> TraderStatus:
+        """
+        Returns trader status
+        :return:
+        """
+        return self.status
+
 
 class Trader(TwsWrapper, TwsClient):
     """
     Main trader object for news trader
     """
-    def __init__(self, symbol, expiry, sec_type, exchange):
+    def __init__(self, symbol: str, expiry: str, sec_type: str, exchange: str, currency: str):
         """
         Simple constructor for the trader class
         """
@@ -243,6 +311,18 @@ class Trader(TwsWrapper, TwsClient):
         self.exchange = exchange
         self.sec_type = sec_type
         self.expiry = expiry
+        self.currency = currency
+
+        # Bookkeeping
+        self.entry_price = 0
+        self.pnl = 0
+
+    def print_pnl(self):
+        """
+        Prints out current PnL for the trader
+        :return:
+        """
+        self.logger.log("Current PnL is: " + str(self.pnl))
 
     def update_order_prices(self):
         """
@@ -252,7 +332,7 @@ class Trader(TwsWrapper, TwsClient):
         self.logger.log("Updating order prices")
         self.wrapper_price_update(self.get_last_price())
         for i in self.get_orders():
-            self.placeOrder(i.orderId, self.inst, i)
+            self.placeOrder(i.orderId, self.cont, i)
 
     def req_data(self):
         """
@@ -262,7 +342,7 @@ class Trader(TwsWrapper, TwsClient):
         self.cont.symbol = self.inst
         self.cont.exchange = self.exchange
         self.cont.secType = self.sec_type
-        self.cont.currency = "USD"
+        self.cont.currency = self.currency
         self.cont.lastTradeDateOrContractMonth = self.expiry
 
         self.logger.log("Requesting market data for the instrument")
@@ -271,7 +351,7 @@ class Trader(TwsWrapper, TwsClient):
 
     def place_orders(self):
         """
-        Opens orders
+        Opens orders for both sides: entry, target and trail stop
         :return:
         """
         self.logger.log("Placing news trader orders")
@@ -326,6 +406,9 @@ class Trader(TwsWrapper, TwsClient):
         # Disconnect from the API
         self.disconnect()
 
+        # Print out the final PnL:
+        self.print_pnl()
+
 
 def main():
     """
@@ -336,7 +419,7 @@ def main():
     logger = Logger(LogLevel.normal, "NewsTrader")
     logger.log("News trader init")
 
-    trader = Trader("CL", "201812", "FUT", "NYMEX")
+    trader = Trader("CL", "201812", "FUT", "NYMEX", "USD")
     trader.req_data()
     time.sleep(6)
     trader.trade()
