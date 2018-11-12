@@ -190,7 +190,9 @@ class TwsWrapper(EWrapper):
         :return:
         """
         # super().tickPrice(req_id, tick_type, price, attrib)
-        # Here we need to add checking on the price levels and order adjustments.
+        # Here we just update the tick price, order adjustment is run in an
+        # endless trader loop in a different thread. Scroll down to see the code.
+
         log_str = "Price tick " + str(tick_type) + " : " + str(price)
         if tick_type == TickTypeEnum.LAST:
             self.logger.log("Updating last price to " + str(price))
@@ -206,7 +208,7 @@ class TwsWrapper(EWrapper):
         :param execution:
         :return:
         """
-        self.logger.verbose("Execution details")
+        self.logger.verbose("Execution details for req_id " + str(req_id))
 
     def execDetailsEnd(self, req_id: int):
         """
@@ -214,7 +216,7 @@ class TwsWrapper(EWrapper):
         :param req_id:
         :return:
         """
-        self.logger.verbose("End of execution details")
+        self.logger.verbose("End of execution details for req_id " + str(req_id))
 
     def orderStatus(self, order_id: OrderId, status: str, filled: float,
                     remaining: float, avg_fill_price: float, perm_id: int,
@@ -235,7 +237,8 @@ class TwsWrapper(EWrapper):
         :param mkt_cap_price:
         :return:
         """
-        self.logger.verbose("Order status processing and override")
+        self.logger.log("Order " + str(order_id) + " status " + status +
+                        " fill price " + str(avg_fill_price))
         # This part should be covered by OCA grouping on entry orders
         if order_id == self.long_entry.orderId or order_id == self.short_entry.orderId:
             self.status = TraderStatus.ACTIVE
