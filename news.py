@@ -378,7 +378,39 @@ class Trader(TwsWrapper, TwsClient):
         adj_thread.start()
         setattr(self, "_adj_thread", adj_thread)
 
+        # TODO here we need to add endless loop for user input (ie. exit trader, change status)
+        user_input = ""
+        while user_input != "Q":
+            user_input = input("News trader (Quit, Hot, Cold:").upper()
+            if user_input == "H":
+                # If cold, enter new orders, start updating prices
+                if self.get_trader_status() == TraderStatus.COLD:
+                    self.place_orders()
+                    self.set_trader_status(TraderStatus.HOT)
+
+                # Do nothing if we are active
+                if self.get_trader_status() == TraderStatus.ACTIVE:
+                    self.logger.error("We have active positions, will not change state!")
+
+            if user_input == "C":
+                # If we are active, show respective error message
+                if self.get_trader_status() == TraderStatus.ACTIVE:
+                    self.logger.error("Trader active, there are open positions!")
+
+                # Cancel all open orders
+                if self.get_trader_status() == TraderStatus.HOT or self.get_trader_status() == TraderStatus.ACTIVE:
+                    self.cancelOrders()
+                self.set_trader_status(TraderStatus.COLD)
+
         self.logger.log("Shutting down main trading loop")
+
+    def cancel_orders(self):
+        """
+        Cancels all open orders
+        :return:
+        """
+        for i in self.get_orders():
+            self.cancelOrder(i.orderId)
 
     def update_loop(self):
         """
@@ -400,8 +432,7 @@ class Trader(TwsWrapper, TwsClient):
         self.logger.log("Trader closing down")
         # If we have active orders, cancel them
         if self.status == TraderStatus.HOT:
-            for i in self.get_orders():
-                self.cancelOrder(i.orderId)
+            self.cancel_orders()
 
         # Stop market data
         self.cancelMktData(3)
