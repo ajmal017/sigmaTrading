@@ -41,13 +41,20 @@ class LogLevel(Enum):
 class Logger:
     """
     Implementation of simple logging functionality
+    TODO: Logging into file, logging into a database
     """
     def __init__(self, l: LogLevel, name):
         self.logLevel = l
         self.name = name
 
-    def myPrint(self, l: LogLevel, s):
-        print(datetime.datetime.now(), ":", self.name, ":", l.name, ":", s)
+    def my_print(self, l: LogLevel, s):
+        """
+        Alternative generic printout
+        :param l: log level
+        :param s: string to be logged
+        :return: nothing
+        """
+        print(datetime.datetime.now(), ":", l.name, ":", self.name, ":", s)
 
     def log(self, s):
         """
@@ -56,7 +63,7 @@ class Logger:
         :return: nothing
         """
         if self.logLevel >= LogLevel.normal:
-            self.myPrint(LogLevel.normal, s)
+            self.my_print(LogLevel.normal, s)
 
     def error(self, s):
         """
@@ -65,7 +72,7 @@ class Logger:
         :return: nothing
         """
         if self.logLevel >= LogLevel.error:
-            self.myPrint(LogLevel.error, s)
+            self.my_print(LogLevel.error, s)
 
     def verbose(self, s):
         """
@@ -74,4 +81,4 @@ class Logger:
         :return: nothing
         """
         if self.logLevel >= LogLevel.verbose:
-            self.myPrint(LogLevel.verbose, s)
+            self.my_print(LogLevel.verbose, s)

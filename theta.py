@@ -22,6 +22,8 @@ Required libs
 - Pyomo and GLPK
 - AWS Dynamo and S3
 """
+from threading import Thread
+import time
 from logger import *
 from ibapi.wrapper import *
 from ibapi.client import *
@@ -44,11 +46,52 @@ class ThetaWrapper(EWrapper):
     """
     Extension of EWrapper class
     """
-    def __init__(self):
+    def __init__(self, symbol):
         """
         Simple constructor
+        :param symbol Symbol for FOPs
         """
         EWrapper.__init__(self)
+        self.logger = Logger(LogLevel.normal, "Theta Wrapper")
+        self.logger.log("Theta Wrapper init")
+        self.portfolio = {}
+        self.symbol = symbol
+
+    def error(self, req_id: TickerId, error_code: int, error_string: str):
+        """
+        Error reporting
+        :param req_id:
+        :param error_code:
+        :param error_string:
+        :return:
+        """
+        self.logger.error(error_string)
+
+    def updatePortfolio(self, contract: Contract, position: float, market_price: float, market_value: float,
+                        average_cost: float, unrealized_pnl: float, realized_pnl: float, account_name: str):
+        """
+        Account update override
+        :param contract:
+        :param position:
+        :param market_price:
+        :param market_value:
+        :param average_cost:
+        :param unrealized_pnl:
+        :param realized_pnl:
+        :param account_name:
+        :return:
+        """
+
+        # super().updatePortfolio(contract, position, market_price, market_value, average_cost,
+        #                        unrealized_pnl, realized_pnl, account_name)
+        self.logger.verbose("UpdatePortfolio " + contract.symbol + "" + contract.secType + "@" +
+                            str(contract.exchange) + " Pos:" + str(position) + " MktPrice:" +
+                            str(market_price) + " MktValue:" + str(market_value) + " AvgCost:" +
+                            str(average_cost) + " UnrPNL:" + str(unrealized_pnl) + " RlzPNL:" +
+                            str(realized_pnl) + " AcctName:" + account_name)
+        if contract.symbol == self.symbol:
+            self.portfolio[contract.conId] = {"id": contract.conId, "pos": position,
+                                              "price": market_price, "pnl": unrealized_pnl}
 
 
 class ThetaTrader(ThetaClient, ThetaWrapper):
@@ -61,21 +104,43 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         Standard constructor for the class
         """
         self.logger = Logger(LogLevel.normal, "Theta strategy")
+        self.logger.log("Theta trading and balancing init")
+        self.twsId = 13
+        self.twsPort = 4001
+        self.twsHost = "localhost"
         self.symbol = "CL"
-        self.portfolio = []
+        self.acct = "DU337774"
 
-        ThetaWrapper.__init__(self)
+        ThetaWrapper.__init__(self, self.symbol)
         ThetaClient.__init__(self, wrapper=self)
 
-    # TODO: Write a account update code
+        # Connect to IB and start the event thread
+        self.connect(self.twsHost, self.twsPort, self.twsId)
+        thread = Thread(target=self.run)
+        thread.start()
+        setattr(self, "_thread", thread)
+
+        # Start receiving account updates
+        self.reqAccountUpdates(True, self.acct)
 
     # TODO: Implement running loop code
-    def run(self):
+    def trade(self):
         """
         Main trading loop code
         :return:
         """
         pass
+
+    def stop(self):
+        """
+        Stops the trader, closes down the connection to TWS API
+        :return:
+        """
+        self.logger.log("Shutting down theta trading and balancing")
+        self.reqAccountUpdates(False, self.acct)
+        self.disconnect()
+        for i in self.portfolio.values():
+            print(i.values())
 
 
 def main():
@@ -85,7 +150,9 @@ def main():
     :return:
     """
     trader = ThetaTrader()
-    trader.run()
+    trader.trade()
+    time.sleep(5)
+    trader.stop()
 
 
 if __name__ == "__main__":
