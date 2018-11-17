@@ -275,6 +275,7 @@ class TwsWrapper(EWrapper):
         :param status:
         :return:
         """
+        self.logger.log("Setting trader status to " + status.toString())
         self.status = status
 
     def get_trader_status(self) -> TraderStatus:
@@ -399,7 +400,7 @@ class Trader(TwsWrapper, TwsClient):
 
                 # Cancel all open orders
                 if self.get_trader_status() == TraderStatus.HOT or self.get_trader_status() == TraderStatus.ACTIVE:
-                    self.cancelOrders()
+                    self.cancel_orders()
                 self.set_trader_status(TraderStatus.COLD)
 
         self.logger.log("Shutting down main trading loop")
