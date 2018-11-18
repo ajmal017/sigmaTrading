@@ -53,7 +53,7 @@ class Logger:
         self.logLevel = l
         self.name = name
         self.fn = fn
-        if self.fn == fn:
+        if not self.fn == "":
             self.f = open(fn, 'a')
         else:
             self.f = None

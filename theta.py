@@ -22,11 +22,13 @@ Required libs
 - Pyomo and GLPK
 - AWS Dynamo and S3
 """
+# TODO raise exception or quit when connection fails (or do something else?)
 from threading import Thread
 import time
 from logger import *
 from ibapi.wrapper import *
 from ibapi.client import *
+import configparser
 
 
 class ThetaClient(EClient):
@@ -89,7 +91,7 @@ class ThetaWrapper(EWrapper):
         :param attrib:
         :return:
         """
-        self.logger.log("Req id " + str(req_id) + " tick " + str(tick_type) + " price " + str(price))
+        self.logger.verbose("Req id " + str(req_id) + " tick " + str(tick_type) + " price " + str(price))
 
     def tickOptionComputation(self, req_id: TickerId, tick_type: TickType, implied_vol: float,
                               delta: float, opt_price: float, pv_dividend: float, gamma: float,
@@ -111,12 +113,19 @@ class ThetaWrapper(EWrapper):
         self.logger.log("Req id " + str(req_id) + " delta " + str(delta) + " gamma " +
                         str(gamma) + " theta " + str(theta))
 
+        # Ticks are 10: bid option, 11: ask option, 12: last option
         for i in self.portfolio.values():
             if i["req_id"] == req_id:
-                i["delta"] = delta
-                i["gamma"] = gamma
-                i["theta"] = theta
-                i["vega"] = vega
+                d = {"delta": delta, "gamma": gamma, "theta": theta, "vega": vega}
+                if tick_type == 10:
+                    i["bid"] = d
+                if tick_type == 11:
+                    i["ask"] = d
+
+                if i["bid"] and i["ask"]:
+                    for k in d.keys():
+                        i["mid"][k] = (i["bid"][k] + i["ask"].k) / 2
+
                 i["ul"] = und_price
 
     def updatePortfolio(self, contract: Contract, position: float, market_price: float, market_value: float,
@@ -161,17 +170,17 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
     The main trader class for portfolio delta monitoring.
     Keep the portfolio of respective FOPs as a list
     """
-    def __init__(self):
+    def __init__(self, config):
         """
-        Standard constructor for the class
+        Standard constructor for the class. Parameters come from a configuration file.
         """
         self.logger = Logger(LogLevel.normal, "Theta strategy")
         self.logger.log("Theta trading and balancing init")
-        self.twsId = 13
-        self.twsPort = 4001
-        self.twsHost = "localhost"
-        self.symbol = "CL"
-        self.sec_type = "FOP"
+        self.twsId = int(config["id"])
+        self.twsPort = int(config["port"])
+        self.twsHost = config["host"]
+        self.symbol = config["symbol"]
+        self.sec_type = config["type"]
         self.acct = "DU337774"
 
         ThetaWrapper.__init__(self, self.symbol, self.sec_type)
@@ -220,7 +229,6 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         self.id_updated = True
         self.logger.verbose("Next valid id present")
 
-    # TODO: Implement running loop code
     def trade(self):
         """
         Main trading loop code
@@ -229,10 +237,29 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         # Check whether we have market data for all the instruments in the portfolio
         # If not, request it
         o = 1
+        self.logger.log("Requesting market data for the portfolio")
         for i in self.portfolio.values():
             i["req_id"] = o
             self.reqMktData(o, i["cont"], "", True, False, [])
             o += 1
+
+        # Now the main trading loop stuff
+        user_input = ""
+        while not user_input.upper().strip() == "Q":
+            user_input = input("Theta trader ([G]reeks, [B]alance, [Q]uit):")
+
+            # Print out portfolio greeks
+            if user_input.upper().strip() == "G":
+                self.logger.log("Portfolio greeks:")
+                greeks = self.aggregate_greeks()
+                for i, j in greeks:
+                    self.logger.log(i + " : " + j)
+
+            # Run portfolio rebalance
+            if user_input.upper().strip() == "B":
+                self.balance()
+
+        self.logger.log("Shutting down trading loop")
 
     def aggregate_greeks(self) -> []:
         """
@@ -244,9 +271,28 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
 
         for i in self.portfolio.values():
             for j in names:
-                greeks[j] += i[j] if j in i else 0
+                if i["mid"]:
+                    greeks[j] += i["mid"][j] if j in i else 0
 
         return greeks
+
+    def balance(self):
+        """
+        The portfolio rebalancing code. So what do we need to do:
+        1) Request option chain data
+        2) Record all the greeks
+        3) Cancel option chain data
+        4) Compose data frame
+        5) Pass that to the optimiser
+        6) Compose orders based on the optimiser result
+        7) Save the optimal basket, current greeks, target greeks and trades to AWS S3
+        8) Execute trades
+        9) Optionally, create trade adjustment logic, start from better price and move towards the worse
+        10) Create an execution summary?
+        If balance is executed manually, then do user review before executing trades.
+        :return:
+        """
+        self.logger.log("Balance not implemented")
 
     def stop(self):
         """
@@ -261,11 +307,8 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
 
         self.disconnect()
         for i in self.portfolio.values():
-            self.logger.log(i.keys())
-            self.logger.log(i.values())
-
-        for i, j in self.aggregate_greeks().items():
-            self.logger.log(i + ":" + str(j))
+            self.logger.log(str(i.keys()))
+            self.logger.log(str(i.values()))
 
 
 def main():
@@ -274,12 +317,13 @@ def main():
 
     :return:
     """
-    trader = ThetaTrader()
+    cf = "config.sample"
+    config = configparser.ConfigParser()
+    config.read(cf)
+    trader = ThetaTrader(config["theta"])
     trader.logger.log("Wait for account update")
     time.sleep(5)
-    trader.logger.log("Requesting market data for the portfolio")
     trader.trade()
-    time.sleep(15)
     trader.stop()
 
 

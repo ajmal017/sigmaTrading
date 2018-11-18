@@ -3,7 +3,6 @@ News trader implementation in Python
 
 Peeter Meos, 8. November 2018
 """
-# TODO: Parameter input from configuration file instead of hardcoded stuff
 # TODO: Somehow separate windows for logging and user input
 from threading import Thread, Event
 from typing import List

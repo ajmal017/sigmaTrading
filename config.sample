@@ -21,3 +21,5 @@ port = 4001
 id = 14
 symbol = CL
 type = FOP
+trigger.delta = 0.5
+trigger.gamma = 0.3
