@@ -29,7 +29,6 @@ from ibapi.wrapper import *
 from ibapi.client import *
 
 
-# TODO: Write extensions for EClient and EWrapper here
 class ThetaClient(EClient):
     """
     Extension EClient class
@@ -56,6 +55,7 @@ class ThetaWrapper(EWrapper):
         self.logger.log("Theta Wrapper init")
         self.portfolio = {}
         self.symbol = symbol
+        self.next_valid_id = -1
 
     def error(self, req_id: TickerId, error_code: int, error_string: str):
         """
@@ -66,6 +66,14 @@ class ThetaWrapper(EWrapper):
         :return:
         """
         self.logger.error(error_string)
+
+    def nextValidId(self, order_id: object):
+        """
+        Update next valid order ID
+        :param order_id:
+        :return:
+        """
+        self.next_valid_id = order_id
 
     def updatePortfolio(self, contract: Contract, position: float, market_price: float, market_value: float,
                         average_cost: float, unrealized_pnl: float, realized_pnl: float, account_name: str):
@@ -90,8 +98,18 @@ class ThetaWrapper(EWrapper):
                             str(average_cost) + " UnrPNL:" + str(unrealized_pnl) + " RlzPNL:" +
                             str(realized_pnl) + " AcctName:" + account_name)
         if contract.symbol == self.symbol:
+            # For some reason TWS returns primary exchange, but we need exchange field
+            contract.exchange = contract.primaryExchange
             self.portfolio[contract.conId] = {"id": contract.conId, "pos": position,
-                                              "price": market_price, "pnl": unrealized_pnl}
+                                              "price": market_price, "pnl": unrealized_pnl,
+                                              "cont": contract}
+
+    def get_portfolio(self):
+        """
+        Returns portfolio dict
+        :return: Portfolio dict
+        """
+        return self.portfolio
 
 
 class ThetaTrader(ThetaClient, ThetaWrapper):
@@ -120,6 +138,10 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         thread.start()
         setattr(self, "_thread", thread)
 
+        # Wait for next valid ID
+        while self.wrapper.next_valid_id == -1:
+            time.sleep(0.5)
+
         # Start receiving account updates
         self.reqAccountUpdates(True, self.acct)
 
@@ -129,7 +151,13 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         Main trading loop code
         :return:
         """
-        pass
+        # Check whether we have market data for all the instruments in the portfolio
+        # If not, request it
+        for i in self.wrapper.portfolio.values():
+            i["req_id"] = self.wrapper.next_valid_id
+            self.logger.log("Request for contract " + i["id"])
+            self.reqMktData(self.wrapper.next_valid_id, i["cont"], "", False, False, [])
+            time.sleep(0.2)
 
     def stop(self):
         """
@@ -140,7 +168,7 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         self.reqAccountUpdates(False, self.acct)
         self.disconnect()
         for i in self.portfolio.values():
-            print(i.values())
+            self.logger.log(i.values())
 
 
 def main():
@@ -150,8 +178,11 @@ def main():
     :return:
     """
     trader = ThetaTrader()
-    trader.trade()
+    trader.logger.log("Wait for account update")
     time.sleep(5)
+    trader.logger.log("Requesting market data for the portfolio")
+    trader.trade()
+    time.sleep(10)
     trader.stop()
 
 
