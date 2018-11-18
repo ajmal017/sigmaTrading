@@ -43,9 +43,20 @@ class Logger:
     Implementation of simple logging functionality
     TODO: Logging into file, logging into a database
     """
-    def __init__(self, l: LogLevel, name):
+    def __init__(self, l: LogLevel, name: str, fn=""):
+        """
+        Simple constructor for logging to screen
+        :param l: logging level
+        :param name: name of for the logger
+        :param fn: filename for logging, if empty then log to screen
+        """
         self.logLevel = l
         self.name = name
+        self.fn = fn
+        if self.fn == fn:
+            self.f = open(fn, 'a')
+        else:
+            self.f = None
 
     def my_print(self, l: LogLevel, s):
         """
@@ -54,7 +65,10 @@ class Logger:
         :param s: string to be logged
         :return: nothing
         """
-        print(datetime.datetime.now(), ":", l.name, ":", self.name, ":", s)
+        if self.f is not None:
+            print(datetime.datetime.now(), ":", l.name, ":", self.name, ":", s)
+        else:
+            print(str(datetime.datetime.now()) + ":" + l.name + ":" + self.name + ":" + s, file=self.f)
 
     def log(self, s):
         """
