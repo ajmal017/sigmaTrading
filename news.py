@@ -11,6 +11,7 @@ from ibapi.client import *
 from ibapi.wrapper import *
 from logger import *
 import configparser
+import getopt
 
 
 class TraderStatus(Enum):
@@ -461,7 +462,7 @@ class Trader(TwsWrapper, TwsClient):
         self.print_pnl()
 
 
-def main():
+def main(argv):
     """
     Main trading code and entry point for the trader
 
@@ -470,8 +471,19 @@ def main():
     logger = Logger(LogLevel.normal, "NewsTrader")
     logger.log("News trader init")
 
-    # Read configuration from file
+    # Read command line
     cf = "config.sample"
+    try:
+        opts, args = getopt.getopt(argv, "c:", [])
+    except getopt.GetoptError:
+        logger.error("Invalid options")
+        sys.exit(2)
+
+    for opt, arg in opts:
+        if opt == "-c":
+            cf = arg
+
+    # Configuration from file
     logger.log("Reading parameters from: " + str(cf))
     config = configparser.ConfigParser()
     config.read(cf)
@@ -487,4 +499,4 @@ def main():
 
 # Main entry point for the news trader
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
