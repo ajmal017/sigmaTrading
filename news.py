@@ -3,7 +3,9 @@ News trader implementation in Python
 
 Peeter Meos, 8. November 2018
 """
-from threading import Thread
+# TODO: Parameter input from configuration file instead of hardcoded stuff
+# TODO: Somehow separate windows for logging and user input
+from threading import Thread, Event
 from typing import List
 import time
 from ibapi.client import *
@@ -21,6 +23,9 @@ class TraderStatus(Enum):
     COLD = 1
     HOT = 2
     ACTIVE = 3
+
+    def to_string(self):
+        return str(self.name)
 
 
 class TwsClient(EClient):
@@ -59,7 +64,7 @@ class TwsWrapper(EWrapper):
         self.entry_spread = 0.05            # Spread for the order structure
         self.tgt_spread = 0.2               # Target distance
         self.trail_spread = 0.2             # Trailing stop distance
-        self.delta_adjust = 0.02            # After how much movement adjust price
+        self.delta_adjust = 0.01            # After how much movement adjust price
         self.time_adjust = 500              # Time step (ms) for order adjustment
         self.q = 1                          # Order quantity
         self.status = TraderStatus.COLD     # Set default trader status
@@ -275,7 +280,7 @@ class TwsWrapper(EWrapper):
         :param status:
         :return:
         """
-        self.logger.log("Setting trader status to " + status.toString())
+        self.logger.log("Setting trader status to " + status.to_string())
         self.status = status
 
     def get_trader_status(self) -> TraderStatus:
@@ -305,9 +310,12 @@ class Trader(TwsWrapper, TwsClient):
         thread.start()
         setattr(self, "_thread", thread)
 
+        # For communicating shutdown
+        self.stop_trading_event = Event()
+
         # Wait until we can do stuff
         while self.nextValidOrderId == -1:
-            time.sleep(10)
+            time.sleep(1)
 
         # Instrument to be traded.
         self.cont = Contract()
@@ -360,7 +368,7 @@ class Trader(TwsWrapper, TwsClient):
         """
         self.logger.log("Placing news trader orders")
         for i in self.get_orders():
-            self.logger.log("Placing order " + str(i.orderId))
+            self.logger.verbose("Placing order " + str(i.orderId))
             self.placeOrder(i.orderId, self.cont, i)
         self.status = TraderStatus.HOT
 
@@ -379,13 +387,20 @@ class Trader(TwsWrapper, TwsClient):
         adj_thread.start()
         setattr(self, "_adj_thread", adj_thread)
 
-        # TODO here we need to add endless loop for user input (ie. exit trader, change status)
+        self.stop_trading_event.clear()
+
         user_input = ""
         while user_input != "Q":
-            user_input = input("News trader (Quit, Hot, Cold:").upper()
+            user_input = input("News trader (Quit, Hot, Cold):").upper()
             if user_input == "H":
                 # If cold, enter new orders, start updating prices
                 if self.get_trader_status() == TraderStatus.COLD:
+                    o = self.nextValidOrderId
+                    self.reqIds(0)
+                    while self.nextValidOrderId == o:
+                        time.sleep(0.1)
+
+                    self.prepare_orders()
                     self.place_orders()
                     self.set_trader_status(TraderStatus.HOT)
 
@@ -404,6 +419,7 @@ class Trader(TwsWrapper, TwsClient):
                 self.set_trader_status(TraderStatus.COLD)
 
         self.logger.log("Shutting down main trading loop")
+        self.stop_trading_event.set()
 
     def cancel_orders(self):
         """
@@ -418,7 +434,7 @@ class Trader(TwsWrapper, TwsClient):
         Thread for updating the order structure
         :return:
         """
-        while True:
+        while not self.stop_trading_event.is_set():
             time.sleep(self.time_adjust / 1000)
             if self.status == TraderStatus.HOT and abs(self.set_price - self.last_price) > self.delta_adjust:
                 self.wrapper_price_update(self.last_price)
