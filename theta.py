@@ -57,6 +57,7 @@ class ThetaWrapper(EWrapper):
         self.symbol = symbol
         self.sec_type = sec_type
         self.next_valid_id = -1
+        self.id_updated = False
 
     def error(self, req_id: TickerId, error_code: int, error_string: str):
         """
@@ -77,6 +78,7 @@ class ThetaWrapper(EWrapper):
         super().nextValidId(order_id)
         self.logger.log("Next valid id updated to " + str(order_id))
         self.next_valid_id = order_id
+        self.id_updated = True
 
     def tickPrice(self, req_id: TickerId, tick_type: TickType, price: float,  attrib: TickAttrib):
         """
@@ -110,7 +112,7 @@ class ThetaWrapper(EWrapper):
                         str(gamma) + " theta " + str(theta))
 
         for i in self.portfolio.values():
-            if i["id"] == req_id:
+            if i["req_id"] == req_id:
                 i["delta"] = delta
                 i["gamma"] = gamma
                 i["theta"] = theta
@@ -171,7 +173,6 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         self.symbol = "CL"
         self.sec_type = "FOP"
         self.acct = "DU337774"
-        self.prev_req_id = -2
 
         ThetaWrapper.__init__(self, self.symbol, self.sec_type)
         ThetaClient.__init__(self, wrapper=self)
@@ -201,7 +202,6 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         :return:
         """
         self.logger.log("Request for contract " + str(contract.conId) + " req id " + str(req_id))
-        self.prev_req_id = req_id
         super().reqMktData(req_id, contract, generic_tick_list, snapshot, reg_snapshot, mkt_options)
 
     def wait_next_order_id(self):
@@ -213,8 +213,11 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         :return:
         """
         self.logger.verbose("Waiting for next id.")
-        while self.prev_req_id == self.next_valid_id:
+        self.id_updated = False
+        self.reqIds(0)
+        while not self.id_updated:
             time.sleep(0.1)
+        self.id_updated = True
         self.logger.verbose("Next valid id present")
 
     # TODO: Implement running loop code
@@ -225,13 +228,25 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         """
         # Check whether we have market data for all the instruments in the portfolio
         # If not, request it
-        self.next_valid_id = int(self.next_valid_id) + 1
+        o = 1
         for i in self.portfolio.values():
-            i["req_id"] = self.next_valid_id
-            time.sleep(0.5)
-            self.reqMktData(self.next_valid_id, i["cont"], "", True, False, [])
-            self.next_valid_id = int(self.next_valid_id) + 1
-            self.wait_next_order_id()
+            i["req_id"] = o
+            self.reqMktData(o, i["cont"], "", True, False, [])
+            o += 1
+
+    def aggregate_greeks(self) -> []:
+        """
+        Aggregates portfolio greeks
+        :return: list containing greeks
+        """
+        names = ["delta", "gamma", "theta", "vega"]
+        greeks = {"delta": 0, "gamma": 0, "theta": 0, "vega": 0}
+
+        for i in self.portfolio.values():
+            for j in names:
+                greeks[j] += i[j] if j in i else 0
+
+        return greeks
 
     def stop(self):
         """
@@ -248,6 +263,9 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         for i in self.portfolio.values():
             self.logger.log(i.keys())
             self.logger.log(i.values())
+
+        for i, j in self.aggregate_greeks().items():
+            self.logger.log(i + ":" + str(j))
 
 
 def main():
