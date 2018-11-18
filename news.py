@@ -11,6 +11,7 @@ import time
 from ibapi.client import *
 from ibapi.wrapper import *
 from logger import *
+import configparser
 
 
 class TraderStatus(Enum):
@@ -44,7 +45,7 @@ class TwsWrapper(EWrapper):
     """
     EWrapper extension for news trader
     """
-    def __init__(self):
+    def __init__(self, config):
         """
         Simple constructor for the wrapper
         Also handles creation and initialisation of orders for the
@@ -61,12 +62,12 @@ class TwsWrapper(EWrapper):
         # At some later stage this also needs to be dynamic and be set somewhere else
         self.last_price = -1.0              # Last known price of the instrument
         self.set_price = -1.0               # The price that the order structure is set at
-        self.entry_spread = 0.05            # Spread for the order structure
-        self.tgt_spread = 0.2               # Target distance
-        self.trail_spread = 0.2             # Trailing stop distance
-        self.delta_adjust = 0.01            # After how much movement adjust price
-        self.time_adjust = 500              # Time step (ms) for order adjustment
-        self.q = 1                          # Order quantity
+        self.entry_spread = float(config["entry.spread"])      # Spread for the order structure
+        self.tgt_spread = float(config["tgt.spread"])          # Target distance
+        self.trail_spread = float(config["trail.spread"])      # Trailing stop distance
+        self.delta_adjust = float(config["delta.adjust"])      # After how much movement adjust price
+        self.time_adjust = int(config["time.adjust"])        # Time step (ms) for order adjustment
+        self.q = int(config["q"])                            # Order quantity
         self.status = TraderStatus.COLD     # Set default trader status
 
         # Initialize orders
@@ -295,17 +296,17 @@ class Trader(TwsWrapper, TwsClient):
     """
     Main trader object for news trader
     """
-    def __init__(self, symbol: str, expiry: str, sec_type: str, exchange: str, currency: str):
+    def __init__(self, config):
         """
         Simple constructor for the trader class
         """
         self.logger = Logger(LogLevel.normal, "Trader")
         self.logger.log("Trader init")
 
-        TwsWrapper.__init__(self)
+        TwsWrapper.__init__(self, config)
         TwsClient.__init__(self, wrapper=self)
 
-        self.connect("localhost", 4001, 12)
+        self.connect(config["host"], int(config["port"]), int(config["id"]))
         thread = Thread(target=self.run)
         thread.start()
         setattr(self, "_thread", thread)
@@ -319,11 +320,11 @@ class Trader(TwsWrapper, TwsClient):
 
         # Instrument to be traded.
         self.cont = Contract()
-        self.inst = symbol
-        self.exchange = exchange
-        self.sec_type = sec_type
-        self.expiry = expiry
-        self.currency = currency
+        self.inst = config["symbol"]
+        self.exchange = config["exchange"]
+        self.sec_type = config["type"]
+        self.expiry = config["expiry"]
+        self.currency = config["currency"]
 
         # Bookkeeping
         self.entry_price = 0
@@ -470,11 +471,16 @@ def main():
     logger = Logger(LogLevel.normal, "NewsTrader")
     logger.log("News trader init")
 
-    trader = Trader("CL", "201812", "FUT", "NYMEX", "USD")
+    # Read configuration from file
+    cf = "config.sample"
+    logger.log("Reading parameters from: " + str(cf))
+    config = configparser.ConfigParser()
+    config.read(cf)
+
+    trader = Trader(config['news'])
     trader.req_data()
     time.sleep(6)
     trader.trade()
-    time.sleep(10)
     trader.stop()
 
     logger.log("News trader exiting")

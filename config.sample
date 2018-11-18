@@ -1,0 +1,23 @@
+[news]
+host = localhost
+port = 4001
+id = 13
+symbol = CL
+type = FUT
+currency = USD
+exchange = NYMEX
+expiry = 201812
+log = NORMAL
+entry.spread = 0.05
+tgt.spread = 0.2
+trail.spread = 0.2
+delta.adjust = 0.01
+q = 1
+time.adjust = 500
+
+[theta]
+host = localhost
+port = 4001
+id = 14
+symbol = CL
+type = FOP
