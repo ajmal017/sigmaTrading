@@ -45,7 +45,7 @@ class ThetaWrapper(EWrapper):
     """
     Extension of EWrapper class
     """
-    def __init__(self, symbol):
+    def __init__(self, symbol, sec_type):
         """
         Simple constructor
         :param symbol Symbol for FOPs
@@ -55,6 +55,7 @@ class ThetaWrapper(EWrapper):
         self.logger.log("Theta Wrapper init")
         self.portfolio = {}
         self.symbol = symbol
+        self.sec_type = sec_type
         self.next_valid_id = -1
 
     def error(self, req_id: TickerId, error_code: int, error_string: str):
@@ -73,7 +74,48 @@ class ThetaWrapper(EWrapper):
         :param order_id:
         :return:
         """
+        super().nextValidId(order_id)
+        self.logger.log("Next valid id updated to " + str(order_id))
         self.next_valid_id = order_id
+
+    def tickPrice(self, req_id: TickerId, tick_type: TickType, price: float,  attrib: TickAttrib):
+        """
+        Price tick override and processing
+        :param req_id:
+        :param tick_type:
+        :param price:
+        :param attrib:
+        :return:
+        """
+        self.logger.log("Req id " + str(req_id) + " tick " + str(tick_type) + " price " + str(price))
+
+    def tickOptionComputation(self, req_id: TickerId, tick_type: TickType, implied_vol: float,
+                              delta: float, opt_price: float, pv_dividend: float, gamma: float,
+                              vega: float, theta: float, und_price: float):
+        """
+        Option greeks handling
+        :param req_id:
+        :param tick_type:
+        :param implied_vol:
+        :param delta:
+        :param opt_price:
+        :param pv_dividend:
+        :param gamma:
+        :param vega:
+        :param theta:
+        :param und_price:
+        :return:
+        """
+        self.logger.log("Req id " + str(req_id) + " delta " + str(delta) + " gamma " +
+                        str(gamma) + " theta " + str(theta))
+
+        for i in self.portfolio.values():
+            if i["id"] == req_id:
+                i["delta"] = delta
+                i["gamma"] = gamma
+                i["theta"] = theta
+                i["vega"] = vega
+                i["ul"] = und_price
 
     def updatePortfolio(self, contract: Contract, position: float, market_price: float, market_value: float,
                         average_cost: float, unrealized_pnl: float, realized_pnl: float, account_name: str):
@@ -97,7 +139,7 @@ class ThetaWrapper(EWrapper):
                             str(market_price) + " MktValue:" + str(market_value) + " AvgCost:" +
                             str(average_cost) + " UnrPNL:" + str(unrealized_pnl) + " RlzPNL:" +
                             str(realized_pnl) + " AcctName:" + account_name)
-        if contract.symbol == self.symbol:
+        if contract.symbol == self.symbol and contract.secType == self.sec_type:
             # For some reason TWS returns primary exchange, but we need exchange field
             contract.exchange = contract.primaryExchange
             self.portfolio[contract.conId] = {"id": contract.conId, "pos": position,
@@ -127,9 +169,11 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         self.twsPort = 4001
         self.twsHost = "localhost"
         self.symbol = "CL"
+        self.sec_type = "FOP"
         self.acct = "DU337774"
+        self.prev_req_id = -2
 
-        ThetaWrapper.__init__(self, self.symbol)
+        ThetaWrapper.__init__(self, self.symbol, self.sec_type)
         ThetaClient.__init__(self, wrapper=self)
 
         # Connect to IB and start the event thread
@@ -139,11 +183,39 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         setattr(self, "_thread", thread)
 
         # Wait for next valid ID
-        while self.wrapper.next_valid_id == -1:
-            time.sleep(0.5)
+        self.wait_next_order_id()
 
         # Start receiving account updates
         self.reqAccountUpdates(True, self.acct)
+
+    def reqMktData(self, req_id: TickerId, contract: Contract, generic_tick_list: str, snapshot: bool,
+                   reg_snapshot: bool, mkt_options: TagValueList):
+        """
+        Override of reqMktData
+        :param req_id:
+        :param contract:
+        :param generic_tick_list:
+        :param snapshot:
+        :param reg_snapshot:
+        :param mkt_options:
+        :return:
+        """
+        self.logger.log("Request for contract " + str(contract.conId) + " req id " + str(req_id))
+        self.prev_req_id = req_id
+        super().reqMktData(req_id, contract, generic_tick_list, snapshot, reg_snapshot, mkt_options)
+
+    def wait_next_order_id(self):
+        """
+        Waits until next order id is generated.
+        What if it gets generated already before we get here?
+        Possible refactoring necessary
+
+        :return:
+        """
+        self.logger.verbose("Waiting for next id.")
+        while self.prev_req_id == self.next_valid_id:
+            time.sleep(0.1)
+        self.logger.verbose("Next valid id present")
 
     # TODO: Implement running loop code
     def trade(self):
@@ -153,11 +225,13 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         """
         # Check whether we have market data for all the instruments in the portfolio
         # If not, request it
-        for i in self.wrapper.portfolio.values():
-            i["req_id"] = self.wrapper.next_valid_id
-            self.logger.log("Request for contract " + i["id"])
-            self.reqMktData(self.wrapper.next_valid_id, i["cont"], "", False, False, [])
-            time.sleep(0.2)
+        self.next_valid_id = int(self.next_valid_id) + 1
+        for i in self.portfolio.values():
+            i["req_id"] = self.next_valid_id
+            time.sleep(0.5)
+            self.reqMktData(self.next_valid_id, i["cont"], "", True, False, [])
+            self.next_valid_id = int(self.next_valid_id) + 1
+            self.wait_next_order_id()
 
     def stop(self):
         """
@@ -166,8 +240,13 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         """
         self.logger.log("Shutting down theta trading and balancing")
         self.reqAccountUpdates(False, self.acct)
+
+        for i in self.portfolio.values():
+            self.cancelMktData(i["req_id"])
+
         self.disconnect()
         for i in self.portfolio.values():
+            self.logger.log(i.keys())
             self.logger.log(i.values())
 
 
@@ -182,7 +261,7 @@ def main():
     time.sleep(5)
     trader.logger.log("Requesting market data for the portfolio")
     trader.trade()
-    time.sleep(10)
+    time.sleep(15)
     trader.stop()
 
 
