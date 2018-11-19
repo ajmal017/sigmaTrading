@@ -6,12 +6,12 @@ symbol = CL
 type = FUT
 currency = USD
 exchange = NYMEX
-expiry = 201812
+expiry = 201901
 log = NORMAL
 entry.spread = 0.05
 tgt.spread = 0.2
 trail.spread = 0.2
-delta.adjust = 0.01
+delta.adjust = 0.02
 q = 1
 time.adjust = 500
 

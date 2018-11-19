@@ -84,41 +84,47 @@ class TwsWrapper(EWrapper):
         self.long_entry.action = "BUY"
         self.long_entry.orderType = "STP LMT"
         self.long_entry.totalQuantity = self.q
-        self.long_entry.transmit = False
+        self.long_entry.transmit = True
+        self.long_entry.outsideRth = True
 
         # Long target
         self.long_tgt.action = "SELL"
         self.long_tgt.orderType = "LMT"
         self.long_tgt.totalQuantity = self.q
-        self.long_tgt.transmit = False
-        self.long_tgt.ocaGroup = "News_Long"
+        self.long_tgt.transmit = True
+        self.long_tgt.outsideRth = True
+        self.long_tgt.ocaGroup = "NewsLong"
 
         # Long trail
         self.long_trail.action = "SELL"
         self.long_trail.orderType = "TRAIL"
         self.long_trail.totalQuantity = self.q
-        self.long_trail.ocaGroup = "News_Long"
-        self.long_trail.transmit = False  # Should be true
+        self.long_trail.ocaGroup = "NewsLong"
+        self.long_trail.transmit = True  # Should be true
+        self.long_trail.outsideRth = True
 
         # Short entry
         self.short_entry.action = "SELL"
         self.short_entry.orderType = "STP LMT"
         self.short_entry.totalQuantity = self.q
-        self.short_entry.transmit = False
+        self.short_entry.transmit = True
+        self.short_entry.outsideRth = True
 
         # Short target
         self.short_tgt.action = "BUY"
         self.short_tgt.orderType = "LMT"
         self.short_tgt.totalQuantity = self.q
-        self.short_tgt.ocaGroup = "News_Short"
-        self.short_tgt.transmit = False
+        self.short_tgt.ocaGroup = "NewsShort"
+        self.short_tgt.transmit = True
+        self.short_tgt.outsideRth = True
 
         # Short trail
         self.short_trail.action = "BUY"
         self.short_trail.orderType = "TRAIL"
         self.short_trail.totalQuantity = self.q
-        self.short_trail.ocaGroup = "News_Short"
-        self.short_trail.transmit = False  # Should be true
+        self.short_trail.ocaGroup = "NewsShort"
+        self.short_trail.transmit = True  # Should be true
+        self.short_trail.outsideRth = True
 
     def nextValidId(self, order_id: int):
         """
@@ -158,7 +164,7 @@ class TwsWrapper(EWrapper):
         self.long_trail.parentId = str(self.long_entry.orderId)
 
         self.short_entry.orderId = str(o + 3)
-        self.short_entry.ocaGroup = "News Trader"
+        self.short_entry.ocaGroup = "News trader"
         self.short_tgt.orderId = str(o + 4)
         self.short_tgt.parentId = str(self.short_entry.orderId)
         self.short_trail.orderId = str(o + 5)
@@ -176,15 +182,15 @@ class TwsWrapper(EWrapper):
         self.long_entry.auxPrice = set_price + self.entry_spread
         self.long_tgt.lmtPrice = set_price + self.tgt_spread
         self.long_trail.trailStopPrice = set_price - self.trail_spread
-        self.long_trail.lmtPriceOffset = self.trail_spread
-        self.long_trail.auxPrice = self.trail_spread
+        # self.long_trail.lmtPriceOffset = self.trail_spread
+        self.long_trail.auxPrice = set_price - self.trail_spread
 
         self.short_entry.lmtPrice = set_price - self.entry_spread
         self.short_entry.auxPrice = set_price - self.entry_spread
         self.short_tgt.lmtPrice = set_price - self.tgt_spread
         self.short_trail.trailStopPrice = set_price + self.trail_spread
-        self.short_trail.lmtPriceOffset = self.trail_spread
-        self.short_trail.auxPrice = self.trail_spread
+        # self.short_trail.lmtPriceOffset = self.trail_spread
+        self.short_trail.auxPrice = set_price + self.trail_spread
 
     def tickPrice(self, req_id: TickerId, tick_type: TickType, price: float, attrib: TickAttrib):
         """
@@ -223,6 +229,17 @@ class TwsWrapper(EWrapper):
         :return:
         """
         self.logger.verbose("End of execution details for req_id " + str(req_id))
+        # This part should be covered by OCA grouping on entry orders
+        if req_id == self.long_entry.orderId or req_id == self.short_entry.orderId:
+            self.status = TraderStatus.ACTIVE
+
+        if req_id == self.long_trail.orderId or req_id == self.long_tgt.orderId:
+            self.status = TraderStatus.COLD
+            # Here we should add PnL calculation
+
+        if req_id == self.short_trail.orderId or req_id == self.short_tgt.orderId:
+            self.status = TraderStatus.COLD
+            # Here we should add PnL calculation
 
     def orderStatus(self, order_id: OrderId, status: str, filled: float,
                     remaining: float, avg_fill_price: float, perm_id: int,
@@ -243,19 +260,7 @@ class TwsWrapper(EWrapper):
         :param mkt_cap_price:
         :return:
         """
-        self.logger.log("Order " + str(order_id) + " status " + status +
-                        " fill price " + str(avg_fill_price))
-        # This part should be covered by OCA grouping on entry orders
-        if order_id == self.long_entry.orderId or order_id == self.short_entry.orderId:
-            self.status = TraderStatus.ACTIVE
-
-        if order_id == self.long_trail.orderId or order_id == self.long_tgt.orderId:
-            self.status = TraderStatus.COLD
-            # Here we should add PnL calculation
-
-        if order_id == self.short_trail.orderId or order_id == self.short_tgt.orderId:
-            self.status = TraderStatus.COLD
-            # Here we should add PnL calculation
+        self.logger.log("Order " + str(order_id) + " status " + status)
 
     def error(self, req_id: TickerId, error_code: int, error_string: str):
         """
@@ -365,9 +370,13 @@ class Trader(TwsWrapper, TwsClient):
     def place_orders(self):
         """
         Opens orders for both sides: entry, target and trail stop
+        If orders are already open, update the prices.
+        Mechanics for TWS are the same.
         :return:
         """
-        self.logger.log("Placing news trader orders")
+        if self.status == TraderStatus.COLD:
+            self.logger.log("Placing news trader orders")
+
         for i in self.get_orders():
             self.logger.verbose("Placing order " + str(i.orderId))
             self.placeOrder(i.orderId, self.cont, i)
