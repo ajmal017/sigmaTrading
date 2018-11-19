@@ -205,7 +205,6 @@ class TwsWrapper(EWrapper):
         # Here we just update the tick price, order adjustment is run in an
         # endless trader loop in a different thread. Scroll down to see the code.
 
-        log_str = "Price tick " + str(tick_type) + " : " + str(price)
         if tick_type == TickTypeEnum.LAST:
             self.logger.verbose("Updating last price to " + str(price))
             self.last_price = price
@@ -250,21 +249,33 @@ class TwsWrapper(EWrapper):
         """
         # TODO: For some reason, when entry executes, trader status does not change.
         # This part should be covered by OCA grouping on entry orders
-        if req_id == self.long_entry.orderId or req_id == self.short_entry.orderId:
+        # For whatever reason order status on one filled order appears twice?
+
+        if self.status == TraderStatus.ACTIVE and status == "Filled":
+            self.status = TraderStatus.COLD
+            self.logger.log("Changing status to " + str(self.status))
+
+        elif self.status == TraderStatus.HOT and status == "Filled":
             self.status = TraderStatus.ACTIVE
             self.logger.log("Changing status to " + str(self.status))
 
-        if req_id == self.long_trail.orderId or req_id == self.long_tgt.orderId:
+        """
+        if status == "Filled" and (int(req_id) == self.long_entry.orderId or int(req_id) == self.short_entry.orderId):
+            self.status = TraderStatus.ACTIVE
+            self.logger.log("Changing status to " + str(self.status))
+
+        if status == "Filled" and (int(req_id) == self.long_trail.orderId or int(req_id) == self.long_tgt.orderId):
             self.status = TraderStatus.COLD
             self.logger.log("Changing status to " + str(self.status))
             # Here we should add PnL calculation
 
-        if req_id == self.short_trail.orderId or req_id == self.short_tgt.orderId:
+        if status == "Filled" and (int(req_id) == self.short_trail.orderId or int(req_id) == self.short_tgt.orderId):
             self.status = TraderStatus.COLD
             self.logger.log("Changing status to " + str(self.status))
             # Here we should add PnL calculation
+        """
 
-        self.logger.log("Order " + str(req_id) + " status " + status)
+        # self.logger.log("Order " + str(req_id) + " status " + status)
 
     def error(self, req_id: TickerId, error_code: int, error_string: str):
         """
@@ -405,7 +416,9 @@ class Trader(TwsWrapper, TwsClient):
 
         user_input = ""
         while user_input != "Q":
-            user_input = input("News trader (Quit, Hot, Cold):").upper()
+            user_input = input("News trader (Quit, Hot, Cold, Status):").upper()
+            if user_input == "S":
+                self.logger.log("Status is " + str(self.get_trader_status()))
             if user_input == "H":
                 # If cold, enter new orders, start updating prices
                 if self.get_trader_status() == TraderStatus.COLD:
