@@ -157,14 +157,14 @@ class TwsWrapper(EWrapper):
 
         # Populate orders
         self.long_entry.orderId = str(o)
-        self.long_entry.ocaGroup = "News trader"
+        self.long_entry.ocaGroup = "News trader" + str(o)
         self.long_tgt.orderId = str(o + 1)
         self.long_tgt.parentId = str(self.long_entry.orderId)
         self.long_trail.orderId = str(o + 2)
         self.long_trail.parentId = str(self.long_entry.orderId)
 
         self.short_entry.orderId = str(o + 3)
-        self.short_entry.ocaGroup = "News trader"
+        self.short_entry.ocaGroup = "News trader" + str(o)
         self.short_tgt.orderId = str(o + 4)
         self.short_tgt.parentId = str(self.short_entry.orderId)
         self.short_trail.orderId = str(o + 5)
@@ -207,9 +207,8 @@ class TwsWrapper(EWrapper):
 
         log_str = "Price tick " + str(tick_type) + " : " + str(price)
         if tick_type == TickTypeEnum.LAST:
-            self.logger.log("Updating last price to " + str(price))
+            self.logger.verbose("Updating last price to " + str(price))
             self.last_price = price
-        self.logger.verbose(log_str)
 
     def execDetails(self, req_id: int, contract: Contract, execution: Execution):
         """
@@ -229,25 +228,14 @@ class TwsWrapper(EWrapper):
         :return:
         """
         self.logger.verbose("End of execution details for req_id " + str(req_id))
-        # This part should be covered by OCA grouping on entry orders
-        if req_id == self.long_entry.orderId or req_id == self.short_entry.orderId:
-            self.status = TraderStatus.ACTIVE
 
-        if req_id == self.long_trail.orderId or req_id == self.long_tgt.orderId:
-            self.status = TraderStatus.COLD
-            # Here we should add PnL calculation
-
-        if req_id == self.short_trail.orderId or req_id == self.short_tgt.orderId:
-            self.status = TraderStatus.COLD
-            # Here we should add PnL calculation
-
-    def orderStatus(self, order_id: OrderId, status: str, filled: float,
+    def orderStatus(self, req_id: OrderId, status: str, filled: float,
                     remaining: float, avg_fill_price: float, perm_id: int,
                     parent_id: int, last_fill_price: float, client_id: int,
                     why_held: str, mkt_cap_price: float):
         """
         Order status processing for trader status changing
-        :param order_id:
+        :param req_id:
         :param status:
         :param filled:
         :param remaining:
@@ -260,7 +248,23 @@ class TwsWrapper(EWrapper):
         :param mkt_cap_price:
         :return:
         """
-        self.logger.log("Order " + str(order_id) + " status " + status)
+        # TODO: For some reason, when entry executes, trader status does not change.
+        # This part should be covered by OCA grouping on entry orders
+        if req_id == self.long_entry.orderId or req_id == self.short_entry.orderId:
+            self.status = TraderStatus.ACTIVE
+            self.logger.log("Changing status to " + str(self.status))
+
+        if req_id == self.long_trail.orderId or req_id == self.long_tgt.orderId:
+            self.status = TraderStatus.COLD
+            self.logger.log("Changing status to " + str(self.status))
+            # Here we should add PnL calculation
+
+        if req_id == self.short_trail.orderId or req_id == self.short_tgt.orderId:
+            self.status = TraderStatus.COLD
+            self.logger.log("Changing status to " + str(self.status))
+            # Here we should add PnL calculation
+
+        self.logger.log("Order " + str(req_id) + " status " + status)
 
     def error(self, req_id: TickerId, error_code: int, error_string: str):
         """
