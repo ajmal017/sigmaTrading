@@ -57,6 +57,7 @@ class TwsWrapper(EWrapper):
         self.logger.log("Wrapper init")
         EWrapper.__init__(self)
         self.nextValidOrderId = -1
+        self.orders = []
 
         # The settings for the order structure
         # At some later stage this also needs to be dynamic and be set somewhere else
@@ -155,19 +156,27 @@ class TwsWrapper(EWrapper):
         # Update order ids, set parent order ids
         o = self.nextValidOrderId
 
+        self.orders = []
+
         # Populate orders
         self.long_entry.orderId = str(o)
+        self.orders.append({"id": o})
         self.long_entry.ocaGroup = "News trader" + str(o)
         self.long_tgt.orderId = str(o + 1)
+        self.orders.append({"id": o + 1})
         self.long_tgt.parentId = str(self.long_entry.orderId)
         self.long_trail.orderId = str(o + 2)
+        self.orders.append({"id": o + 2})
         self.long_trail.parentId = str(self.long_entry.orderId)
 
         self.short_entry.orderId = str(o + 3)
+        self.orders.append({"id": o + 3})
         self.short_entry.ocaGroup = "News trader" + str(o)
         self.short_tgt.orderId = str(o + 4)
+        self.orders.append({"id": o + 4})
         self.short_tgt.parentId = str(self.short_entry.orderId)
         self.short_trail.orderId = str(o + 5)
+        self.orders.append({"id": o + 5})
         self.short_trail.parentId = str(self.short_entry.orderId)
 
     def wrapper_price_update(self, set_price):
@@ -181,16 +190,16 @@ class TwsWrapper(EWrapper):
         self.long_entry.lmtPrice = set_price + self.entry_spread
         self.long_entry.auxPrice = set_price + self.entry_spread
         self.long_tgt.lmtPrice = set_price + self.tgt_spread
-        self.long_trail.trailStopPrice = set_price - self.trail_spread
+        # self.long_trail.trailStopPrice = set_price - self.trail_spread
         # self.long_trail.lmtPriceOffset = self.trail_spread
-        self.long_trail.auxPrice = set_price - self.trail_spread
+        self.long_trail.auxPrice = self.trail_spread  # Trailing amount
 
         self.short_entry.lmtPrice = set_price - self.entry_spread
         self.short_entry.auxPrice = set_price - self.entry_spread
         self.short_tgt.lmtPrice = set_price - self.tgt_spread
-        self.short_trail.trailStopPrice = set_price + self.trail_spread
+        # self.short_trail.trailStopPrice = set_price + self.trail_spread
         # self.short_trail.lmtPriceOffset = self.trail_spread
-        self.short_trail.auxPrice = set_price + self.trail_spread
+        self.short_trail.auxPrice = self.trail_spread  # Trailing amount
 
     def tickPrice(self, req_id: TickerId, tick_type: TickType, price: float, attrib: TickAttrib):
         """
@@ -251,13 +260,19 @@ class TwsWrapper(EWrapper):
         # This part should be covered by OCA grouping on entry orders
         # For whatever reason order status on one filled order appears twice?
 
-        if self.status == TraderStatus.ACTIVE and status == "Filled":
-            self.status = TraderStatus.COLD
-            self.logger.log("Changing status to " + str(self.status))
-
-        elif self.status == TraderStatus.HOT and status == "Filled":
-            self.status = TraderStatus.ACTIVE
-            self.logger.log("Changing status to " + str(self.status))
+        # Update last known order status
+        for i in range(len(self.orders)):
+            j = self.orders[i]
+            if j["id"] and j["id"] == req_id:
+                if i == 0 or i == 3:
+                    if self.status == TraderStatus.HOT and status == "Filled":
+                        self.logger.log("Changing status to " + str(self.status))
+                        self.status = TraderStatus.ACTIVE
+                else:
+                    if self.status == TraderStatus.ACTIVE and status == "Filled":
+                        self.logger.log("Changing status to " + str(self.status))
+                        self.status = TraderStatus.COLD
+            j["status"] = status
 
         """
         if status == "Filled" and (int(req_id) == self.long_entry.orderId or int(req_id) == self.short_entry.orderId):
@@ -453,8 +468,10 @@ class Trader(TwsWrapper, TwsClient):
         Cancels all open orders
         :return:
         """
-        for i in self.get_orders():
-            self.cancelOrder(i.orderId)
+        # TODO track order statuses and cancel only those orders that are active
+        for i in self.orders:
+            if i["id"] and i["status"] and not i["status"] == "Cancelled":
+                self.cancelOrder(i["id"])
 
     def update_loop(self):
         """
