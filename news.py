@@ -70,6 +70,9 @@ class TwsWrapper(EWrapper):
         self.time_adjust = int(config["time.adjust"])        # Time step (ms) for order adjustment
         self.q = int(config["q"])                            # Order quantity
         self.status = TraderStatus.COLD     # Set default trader status
+        self.pos = 0
+        self.price = 0
+        self.pnl = 0
 
         # Initialize orders
         self.logger.log("Initialising the order structure")
@@ -268,10 +271,24 @@ class TwsWrapper(EWrapper):
                     if self.status == TraderStatus.HOT and status == "Filled":
                         self.logger.log("Changing status to " + str(self.status))
                         self.status = TraderStatus.ACTIVE
+
+                        # For bookkeeping
+                        self.price = avg_fill_price
+                        if i == 0:
+                            self.pos = self.q
+                        else:
+                            self.pos = -self.q
                 else:
                     if self.status == TraderStatus.ACTIVE and status == "Filled":
                         self.logger.log("Changing status to " + str(self.status))
                         self.status = TraderStatus.COLD
+
+                        # For bookkeeping
+                        if self.pos > 0:
+                            self.pnl = self.pnl + self.q * (avg_fill_price - self.price)
+                        else:
+                            self.pnl = self.pnl + self.q * (self.price - avg_fill_price)
+                        self.pos = 0
             j["status"] = status
 
         """
@@ -360,10 +377,6 @@ class Trader(TwsWrapper, TwsClient):
         self.sec_type = config["type"]
         self.expiry = config["expiry"]
         self.currency = config["currency"]
-
-        # Bookkeeping
-        self.entry_price = 0
-        self.pnl = 0
 
     def print_pnl(self):
         """
@@ -455,6 +468,11 @@ class Trader(TwsWrapper, TwsClient):
                 if self.get_trader_status() == TraderStatus.ACTIVE:
                     self.logger.error("Trader active, there are open positions!")
 
+                # If we have open positions, close them
+                if self.pos != 0:
+                    self.logger.log("Closing open positions")
+                    self.close_position()
+
                 # Cancel all open orders
                 if self.get_trader_status() == TraderStatus.HOT or self.get_trader_status() == TraderStatus.ACTIVE:
                     self.cancel_orders()
@@ -472,6 +490,13 @@ class Trader(TwsWrapper, TwsClient):
         for i in self.orders:
             if i["id"] and i["status"] and not i["status"] == "Cancelled":
                 self.cancelOrder(i["id"])
+
+    def close_position(self):
+        """
+        Close any open positions
+        :return:
+        """
+        self.logger.log("Closing open positions not implemented")
 
     def update_loop(self):
         """
