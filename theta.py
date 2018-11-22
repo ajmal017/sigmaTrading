@@ -110,21 +110,30 @@ class ThetaWrapper(EWrapper):
         :param und_price:
         :return:
         """
-        self.logger.log("Req id " + str(req_id) + " delta " + str(delta) + " gamma " +
-                        str(gamma) + " theta " + str(theta))
+        # TODO: What if we have only ask or bid populated?
+        if delta is None or gamma is None or theta is None or vega is None:
+            return
+
+        self.logger.log("Req id " + str(req_id) + " tick type " + str(tick_type) +
+                        " delta " + '{:01.4f}'.format(delta) +
+                        " gamma " + '{:01.4f}'.format(gamma) +
+                        " theta " + '{:01.4f}'.format(theta))
 
         # Ticks are 10: bid option, 11: ask option, 12: last option
         for i in self.portfolio.values():
-            if i["req_id"] == req_id:
+            if "req_id" in i and i["req_id"] == req_id:
                 d = {"delta": delta, "gamma": gamma, "theta": theta, "vega": vega}
                 if tick_type == 10:
                     i["bid"] = d
+                    i["mid"] = d
                 if tick_type == 11:
                     i["ask"] = d
+                    i["mid"] = d
 
-                if i["bid"] and i["ask"]:
-                    for k in d.keys():
-                        i["mid"][k] = (i["bid"][k] + i["ask"].k) / 2
+                if tick_type == 10 or tick_type == 11:
+                    if "bid" in i and "ask" in i:
+                        for k in d.keys():
+                            i["mid"][k] = (i["bid"][k] + i["ask"][k]) / 2
 
                 i["ul"] = und_price
 
@@ -252,8 +261,8 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
             if user_input.upper().strip() == "G":
                 self.logger.log("Portfolio greeks:")
                 greeks = self.aggregate_greeks()
-                for i, j in greeks:
-                    self.logger.log(i + " : " + j)
+                for i, j in greeks.items():
+                    self.logger.log(i + " : " + '{:02.4f}'.format(j))
 
             # Run portfolio rebalance
             if user_input.upper().strip() == "B":
@@ -271,8 +280,8 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
 
         for i in self.portfolio.values():
             for j in names:
-                if i["mid"]:
-                    greeks[j] += i["mid"][j] if j in i else 0
+                if "mid" in i:
+                    greeks[j] += i["mid"][j]
 
         return greeks
 
@@ -303,7 +312,8 @@ class ThetaTrader(ThetaClient, ThetaWrapper):
         self.reqAccountUpdates(False, self.acct)
 
         for i in self.portfolio.values():
-            self.cancelMktData(i["req_id"])
+            if "req_id" in i:
+                self.cancelMktData(i["req_id"])
 
         self.disconnect()
         for i in self.portfolio.values():

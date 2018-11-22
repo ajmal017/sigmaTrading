@@ -23,3 +23,8 @@ symbol = CL
 type = FOP
 trigger.delta = 0.5
 trigger.gamma = 0.3
+
+[optimiser]
+max.delta = 100
+max.gamma = 300
+min.theta = 200

@@ -25,20 +25,12 @@ class TraderStatus(Enum):
     HOT = 2
     ACTIVE = 3
 
-    def to_string(self):
+    def to_string(self) -> str:
+        """
+        Returns string value of the trader status
+        :return: string
+        """
         return str(self.name)
-
-
-class TwsClient(EClient):
-    """
-    EClient extension for news trader
-    """
-    def __init__(self, wrapper):
-        """
-        Simple constructor for the client
-        :param wrapper:
-        """
-        EClient.__init__(self, wrapper)
 
 
 class TwsWrapper(EWrapper):
@@ -344,7 +336,7 @@ class TwsWrapper(EWrapper):
         return self.status
 
 
-class Trader(TwsWrapper, TwsClient):
+class Trader(TwsWrapper, EClient):
     """
     Main trader object for news trader
     """
@@ -356,7 +348,7 @@ class Trader(TwsWrapper, TwsClient):
         self.logger.log("Trader init")
 
         TwsWrapper.__init__(self, config)
-        TwsClient.__init__(self, wrapper=self)
+        EClient.__init__(self, wrapper=self)
 
         self.connect(config["host"], int(config["port"]), int(config["id"]))
         thread = Thread(target=self.run)
@@ -521,7 +513,7 @@ class Trader(TwsWrapper, TwsClient):
             self.cancel_orders()
 
         # Stop market data
-        self.cancelMktData(3)
+        self.cancelMktData(3)  # That 3 is deprecated and means nothing
 
         # Disconnect from the API
         self.disconnect()
