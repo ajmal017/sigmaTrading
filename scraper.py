@@ -21,7 +21,7 @@ class TwsWrapper(EWrapper):
         """
         Constructor override
         """
-        EWrapper.__init__()
+        EWrapper.__init__(self)
 
 
 class Scraper(TwsWrapper, EClient):
@@ -37,6 +37,7 @@ class Scraper(TwsWrapper, EClient):
         self.logger = Logger(LogLevel.normal, "Scraper")
 
         self.connect("localhost", 4001, 15)
+
         thread = Thread(target=self.run)
         thread.start()
         setattr(self, "_thread", thread)
@@ -45,6 +46,7 @@ class Scraper(TwsWrapper, EClient):
         self.reqIds(0)
         while self.next_order == -1:
             time.sleep(0.1)
+        self.logger.log("Next order ID received")
 
         self.logger.log("Market scraper init")
         self.symbol = "CL"
@@ -61,7 +63,7 @@ class Scraper(TwsWrapper, EClient):
         self.inst.lastTradeDateOrContractMonth = self.expiry
 
         self.req_id = self.next_order
-        self.reqRealTimeBars(self.next_order, self.inst, 1, "MIDPOINT", True, [])
+        self.reqRealTimeBars(self.next_order, self.inst, 5, "MIDPOINT", True, [])
 
     def nextValidId(self, order_id: int):
         """
@@ -71,12 +73,12 @@ class Scraper(TwsWrapper, EClient):
         """
         self.next_order = order_id
 
-    def realtimeBar(self, req_id: TickerId, time: int, op: float, high: float, low: float, close: float,
+    def realtimeBar(self, req_id: TickerId, bar_time: int, op: float, high: float, low: float, close: float,
                     volume: int, wap: float, count: int):
         """
         Real time bar reception override
         :param req_id:
-        :param time:
+        :param bar_time:
         :param op:
         :param high:
         :param low:
@@ -86,9 +88,10 @@ class Scraper(TwsWrapper, EClient):
         :param count:
         :return:
         """
-        pass
+        # TODO: Why is this thing not getting called?
+        self.logger.log(str(bar_time) + " O " + str(open) + " H " + str(high) + " L " + str(low) + " C " + str(close))
 
-    def error(self, req_id:TickerId, error_code:int, error_string:str):
+    def error(self, req_id: TickerId, error_code: int, error_string: str):
         """
         Error override
         :param self:
@@ -104,7 +107,11 @@ class Scraper(TwsWrapper, EClient):
         Main scraping loop
         :return:
         """
-        pass
+        self.logger.log("Scraper scraping")
+        user_input = ""
+        while user_input.upper() != "Q":
+            time.sleep(1)
+            user_input = input("Scraper [Q]uit:")
 
     def stop(self):
         """
@@ -113,6 +120,8 @@ class Scraper(TwsWrapper, EClient):
         """
         self.logger.log("Closing down the scraper")
         self.cancelRealTimeBars(self.req_id)
+        self.disconnect()
+        self.logger.log("Goodbye")
 
 
 def main():
@@ -127,6 +136,7 @@ def main():
     scraper = Scraper()
     scraper.scrape()
     scraper.stop()
+    return
 
 
 if __name__ == "__main__":
