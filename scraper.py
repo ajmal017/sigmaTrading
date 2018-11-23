@@ -63,7 +63,8 @@ class Scraper(TwsWrapper, EClient):
         self.inst.lastTradeDateOrContractMonth = self.expiry
 
         self.req_id = self.next_order
-        self.reqRealTimeBars(self.next_order, self.inst, 5, "MIDPOINT", True, [])
+        self.reqRealTimeBars(int(self.req_id), self.inst, 5, "TRADES", True, [])
+        self.reqMktData(int(self.req_id) + 1, self.inst, "", False, False, [])
 
     def nextValidId(self, order_id: int):
         """
@@ -89,7 +90,19 @@ class Scraper(TwsWrapper, EClient):
         :return:
         """
         # TODO: Why is this thing not getting called?
+        super().realtimeBar(req_id, bar_time, op, high, low, close, volume, wap, count)
         self.logger.log(str(bar_time) + " O " + str(open) + " H " + str(high) + " L " + str(low) + " C " + str(close))
+
+    def tickPrice(self, req_id: TickerId, tick_type: TickType, price: float, attrib: TickAttrib):
+        """
+        Price tick override
+        :param req_id:
+        :param tick_type:
+        :param price:
+        :param attrib:
+        :return:
+        """
+        self.logger.log(str(tick_type) + " price " + str(price))
 
     def error(self, req_id: TickerId, error_code: int, error_string: str):
         """
@@ -120,6 +133,7 @@ class Scraper(TwsWrapper, EClient):
         """
         self.logger.log("Closing down the scraper")
         self.cancelRealTimeBars(self.req_id)
+        self.cancelMktData(int(self.req_id) + 1)
         self.disconnect()
         self.logger.log("Goodbye")
 
