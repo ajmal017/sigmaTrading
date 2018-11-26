@@ -7,8 +7,11 @@ Peeter Meos, 8. November 2018
 from threading import Thread, Event
 from typing import List
 import time
+from datetime import datetime
+from datetime import timedelta
 from ibapi.client import *
 from ibapi.wrapper import *
+import ibapi.order_condition as order_condition
 from logger import *
 import configparser
 import getopt
@@ -61,6 +64,7 @@ class TwsWrapper(EWrapper):
         self.delta_adjust = float(config["delta.adjust"])      # After how much movement adjust price
         self.time_adjust = int(config["time.adjust"])        # Time step (ms) for order adjustment
         self.q = int(config["q"])                            # Order quantity
+        self.kill_time = int(config["kill.time"])            # Trade kill time in seconds
         self.status = TraderStatus.COLD     # Set default trader status
         self.pos = 0
         self.price = 0
@@ -71,10 +75,12 @@ class TwsWrapper(EWrapper):
         self.long_entry = Order()
         self.long_tgt = Order()
         self.long_trail = Order()
+        self.long_time = Order()
 
         self.short_entry = Order()
         self.short_tgt = Order()
         self.short_trail = Order()
+        self.short_time = Order()
 
         # Long entry
         self.long_entry.action = "BUY"
@@ -85,7 +91,7 @@ class TwsWrapper(EWrapper):
 
         # Long target
         self.long_tgt.action = "SELL"
-        self.long_tgt.orderType = "LMT"
+        self.long_tgt.orderType = "MIT"
         self.long_tgt.totalQuantity = self.q
         self.long_tgt.transmit = True
         self.long_tgt.outsideRth = True
@@ -99,6 +105,14 @@ class TwsWrapper(EWrapper):
         self.long_trail.transmit = True  # Should be true
         self.long_trail.outsideRth = True
 
+        # Long time stop
+        self.long_time.action = "SELL"
+        self.long_time.orderType = "MKT"
+        self.long_time.totalQuantity = self.q
+        self.long_time.ocaGroup = "NewsLong"
+        self.long_time.transmit = True
+        self.long_time.outsideRth = True
+
         # Short entry
         self.short_entry.action = "SELL"
         self.short_entry.orderType = "STP LMT"
@@ -108,7 +122,7 @@ class TwsWrapper(EWrapper):
 
         # Short target
         self.short_tgt.action = "BUY"
-        self.short_tgt.orderType = "LMT"
+        self.short_tgt.orderType = "MIT"
         self.short_tgt.totalQuantity = self.q
         self.short_tgt.ocaGroup = "NewsShort"
         self.short_tgt.transmit = True
@@ -121,6 +135,14 @@ class TwsWrapper(EWrapper):
         self.short_trail.ocaGroup = "NewsShort"
         self.short_trail.transmit = True  # Should be true
         self.short_trail.outsideRth = True
+
+        # Short time stop
+        self.short_time.action = "BUY"
+        self.short_time.orderType = "MKT"
+        self.short_time.totalQuantity = self.q
+        self.short_time.ocaGroup = "NewsShort"
+        self.short_time.transmit = True
+        self.short_time.outsideRth = True
 
     def nextValidId(self, order_id: int):
         """
@@ -154,6 +176,7 @@ class TwsWrapper(EWrapper):
         self.orders = []
 
         # Populate orders
+
         self.long_entry.orderId = str(o)
         self.orders.append({"id": o})
         self.long_entry.ocaGroup = "News trader" + str(o)
@@ -163,16 +186,20 @@ class TwsWrapper(EWrapper):
         self.long_trail.orderId = str(o + 2)
         self.orders.append({"id": o + 2})
         self.long_trail.parentId = str(self.long_entry.orderId)
-
-        self.short_entry.orderId = str(o + 3)
         self.orders.append({"id": o + 3})
-        self.short_entry.ocaGroup = "News trader" + str(o)
-        self.short_tgt.orderId = str(o + 4)
+        self.long_time.parentId = str(self.long_entry.orderId)
+
+        self.short_entry.orderId = str(o + 4)
         self.orders.append({"id": o + 4})
-        self.short_tgt.parentId = str(self.short_entry.orderId)
-        self.short_trail.orderId = str(o + 5)
+        self.short_entry.ocaGroup = "News trader" + str(o)
+        self.short_tgt.orderId = str(o + 5)
         self.orders.append({"id": o + 5})
+        self.short_tgt.parentId = str(self.short_entry.orderId)
+        self.short_trail.orderId = str(o + 6)
+        self.orders.append({"id": o + 6})
         self.short_trail.parentId = str(self.short_entry.orderId)
+        self.orders.append({"id": o + 7})
+        self.short_time.parentId = str(self.short_entry.orderId)
 
     def wrapper_price_update(self, set_price):
         """
@@ -180,21 +207,35 @@ class TwsWrapper(EWrapper):
         :param set_price:
         :return:
         """
+        # TODO Add time conditioned close. time in format 20181126 09:40:32 EET
+        # Market orders don't work outside RTH?
+        t = datetime.datetime.now() + timedelta(seconds=self.kill_time)
+        time_condition = order_condition.Create(order_condition.OrderCondition.Time)
+        time_condition.isMore = True
+        time_condition.time = t.strftime("%y%m%d %H:%M:%S %Z")
+
         self.logger.log("Setting order structure around price " + str(set_price))
         self.set_price = set_price
+
         self.long_entry.lmtPrice = set_price + self.entry_spread
         self.long_entry.auxPrice = set_price + self.entry_spread
-        self.long_tgt.lmtPrice = set_price + self.tgt_spread
+        self.long_tgt.auxPrice = set_price + self.tgt_spread
         # self.long_trail.trailStopPrice = set_price - self.trail_spread
         # self.long_trail.lmtPriceOffset = self.trail_spread
         self.long_trail.auxPrice = self.trail_spread  # Trailing amount
+        # self.long_time.conditionsCancelOrder = True
+        self.long_time.conditions.clear()
+        self.long_time.conditions.append(time_condition)
 
         self.short_entry.lmtPrice = set_price - self.entry_spread
         self.short_entry.auxPrice = set_price - self.entry_spread
-        self.short_tgt.lmtPrice = set_price - self.tgt_spread
+        self.short_tgt.auxPrice = set_price - self.tgt_spread
         # self.short_trail.trailStopPrice = set_price + self.trail_spread
         # self.short_trail.lmtPriceOffset = self.trail_spread
         self.short_trail.auxPrice = self.trail_spread  # Trailing amount
+        # self.short_time.conditionsCancelOrder = True
+        self.short_time.conditions.clear()
+        self.short_time.conditions.append(time_condition)
 
     def tickPrice(self, req_id: TickerId, tick_type: TickType, price: float, attrib: TickAttrib):
         """
@@ -259,7 +300,7 @@ class TwsWrapper(EWrapper):
         for i in range(len(self.orders)):
             j = self.orders[i]
             if j["id"] and j["id"] == req_id:
-                if i == 0 or i == 3:
+                if i == 0 or i == 4:
                     if self.status == TraderStatus.HOT and status == "Filled":
                         self.logger.log("Changing status to " + str(self.status))
                         self.status = TraderStatus.ACTIVE
@@ -282,22 +323,6 @@ class TwsWrapper(EWrapper):
                             self.pnl = self.pnl + self.q * (self.price - avg_fill_price)
                         self.pos = 0
             j["status"] = status
-
-        """
-        if status == "Filled" and (int(req_id) == self.long_entry.orderId or int(req_id) == self.short_entry.orderId):
-            self.status = TraderStatus.ACTIVE
-            self.logger.log("Changing status to " + str(self.status))
-
-        if status == "Filled" and (int(req_id) == self.long_trail.orderId or int(req_id) == self.long_tgt.orderId):
-            self.status = TraderStatus.COLD
-            self.logger.log("Changing status to " + str(self.status))
-            # Here we should add PnL calculation
-
-        if status == "Filled" and (int(req_id) == self.short_trail.orderId or int(req_id) == self.short_tgt.orderId):
-            self.status = TraderStatus.COLD
-            self.logger.log("Changing status to " + str(self.status))
-            # Here we should add PnL calculation
-        """
 
         # self.logger.log("Order " + str(req_id) + " status " + status)
 
@@ -375,7 +400,7 @@ class Trader(TwsWrapper, EClient):
         Prints out current PnL for the trader
         :return:
         """
-        self.logger.log("Current PnL is: " + str(self.pnl))
+        self.logger.log("Current PnL is: " + '{:02.4f}'.format(self.pnl))
 
     def update_order_prices(self):
         """
