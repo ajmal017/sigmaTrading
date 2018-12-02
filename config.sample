@@ -26,6 +26,7 @@ trigger.delta = 0.5
 trigger.gamma = 0.3
 
 [optimiser]
+gams = c:\\gams\\win64\\24.3\\
 max.delta = 100
 max.gamma = 300
 min.theta = 200
