@@ -25,6 +25,9 @@ type = FOP
 trigger.delta = 0.5
 trigger.gamma = 0.3
 
+[data]
+mkt.table = mktData
+
 [optimiser]
 gams = c:\\gams\\win64\\24.3\\
 max.delta = 100

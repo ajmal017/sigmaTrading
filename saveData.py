@@ -13,7 +13,7 @@ import sys
 from datetime import datetime
 
 
-def write_data(filename: str):
+def write_dynamo(filename: str):
     """
     Main code for the snapshot upload
     :param filename Filename for CSV data
@@ -43,4 +43,4 @@ if __name__ == "__main__":
     """
     Main entry point for the program
     """
-    write_data(sys.argv[1])
+    write_dynamo(sys.argv[1])

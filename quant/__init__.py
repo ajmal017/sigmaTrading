@@ -2,7 +2,10 @@
 Copyright (C) 2018 Sigma Research OÜ. All rights reserved.
 """
 
-""" Package implementing the GAMS optimisation of the portfolio """
+""" 
+Package implementing quantitative finance bits ie. mathematics
+for portfolio optimisation.
+"""
 
 VERSION = {
     'major': 0,

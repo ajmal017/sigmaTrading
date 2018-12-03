@@ -1,0 +1,3 @@
+"""
+Code for margin calculation
+"""
