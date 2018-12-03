@@ -10,7 +10,7 @@ for portfolio optimisation.
 VERSION = {
     'major': 0,
     'minor': 1,
-    'micro': 1}
+    'micro': 2}
 
 
 def get_version_string():
