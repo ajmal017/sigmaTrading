@@ -30,10 +30,6 @@ mkt.table = mktData
 
 [optimiser]
 gams = c:\\gams\\win64\\24.3\\
-max.delta = 100
-max.gamma = 300
-min.theta = 200
-
 account= DU337774
 
 mult=       1000
@@ -46,9 +42,9 @@ trans.cost= 2.5
 max.delta=  0.05
 max.gamma=  0.30
 min.theta=  0.20
-min.vega=   0.20  # Max vega, it seems that we can hedge that!
+min.vega=   0.20
 max.speed=  0.01
-alpha=        1   # Relative importance of theta vs gamma
+alpha=        1
 
 min.price=    0.05
 max.price=    8.0
@@ -59,4 +55,4 @@ max.pos.tot=  40
 max.pos.mon=  6
 max.margin=   45000
 max.trades=   20
-min.days=     10  # Minimum days to expiry for new openings
+min.days=     10

@@ -6,6 +6,7 @@ Date: 3. December 2018
 """
 import math
 from scipy.stats import norm
+import numpy as np
 
 
 def d_one(s, k, r, q, sigma, t):
@@ -19,7 +20,9 @@ def d_one(s, k, r, q, sigma, t):
     :param t: time to expiry
     :return:
     """
-    v = (math.log(s / k) + (r - q + sigma * sigma / 2) * t) / (sigma * math.sqrt(t))
+    r = np.float(r)
+    q = np.float(q)
+    v = (np.log(s / k) + (r - q + sigma * sigma / 2) * t) / (sigma * np.sqrt(t))
     return v
 
 
@@ -34,7 +37,7 @@ def d_two(s, k, r, q, sigma, t):
     :param t: time to expiry
     :return:
     """
-    v = d_one(s, k, r, q, sigma, t) - sigma * math.sqrt(t)
+    v = d_one(s, k, r, q, sigma, t) - sigma * np.sqrt(t)
     return v
 
 
@@ -44,7 +47,7 @@ def phi(x):
     :param x:
     :return:
     """
-    v = math.exp(-(x*x)/2) / math.sqrt(2 * math.pi)
+    v = np.exp(-(x*x)/2) / np.sqrt(2 * np.pi)
     return v
 
 
@@ -59,7 +62,7 @@ def vega(s, k, r, q, sigma, t):
     :param t: time to expiry
     :return:
     """
-    v = k * math.exp(-r * t) * phi(d_two(s, k, r, q, sigma, t)) * math.sqrt(t)
+    v = k * np.exp(-r * t) * phi(d_two(s, k, r, q, sigma, t)) * np.sqrt(t)
     return v
 
 
@@ -73,7 +76,7 @@ def speed(gamma, s, d1, sigma, t):
     :param t: time to expiry
     :return:
     """
-    v = (-(gamma / s) * ((d1 / (sigma * math.sqrt(t))) + 1))
+    v = (-(gamma / s) * ((d1 / (sigma * np.sqrt(t))) + 1))
     return v
 
 
@@ -87,7 +90,7 @@ def vanna(vega, s, d1, sigma, t):
     :param t:
     :return:
     """
-    v = vega / s * (1 - d1 / (sigma * math.sqrt(t)))
+    v = vega / s * (1 - d1 / (sigma * np.sqrt(t)))
     return v
 
 
@@ -117,8 +120,8 @@ def charm(side, d1, d2, r, q, sigma, t):
     :param t: time to expiry
     :return:
     """
-    v1 = math.exp(-q * t) * phi(d1) * (2 * (r - q) * t - d2 * sigma * math.sqrt(t)) / (2 * t * sigma * math.sqrt(t))
+    v1 = np.exp(-q * t) * phi(d1) * (2 * (r - q) * t - d2 * sigma * np.sqrt(t)) / (2 * t * sigma * np.sqrt(t))
 
-    v = q * math.exp(-q * t) * norm.cdf(d1) - v1 if side == "c" else -q * math.exp(-q * t) * norm.cdf(-d1) - v1
+    v = q * np.exp(-q * t) * norm.cdf(d1) - v1 if side == "c" else -q * np.exp(-q * t) * norm.cdf(-d1) - v1
     return v
 
