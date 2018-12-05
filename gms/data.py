@@ -27,7 +27,7 @@ def create_parameter(db: GamsDatabase, name, desc, uel, form, val):
                 v.add_record((lst[i], uel[1][j])).value = float(val.iloc[i, j + 1])
     if form == "sparse":
         for i in uel[0].index:
-            v.add_record(uel[0][i]).value = val[i]
+            v.add_record(uel[0][i]).value = float(val[i])
     return v
 
 
@@ -61,4 +61,4 @@ def create_set(db: GamsDatabase, name, desc, val, dim=1):
     # TODO implement that for multidimensional sets
     v = db.add_set(name, dim, explanatory_text=desc)
     for i in val:
-        v.add_record(i)
+        v.add_record(str(i))

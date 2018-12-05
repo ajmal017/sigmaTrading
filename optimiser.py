@@ -45,9 +45,6 @@ class Optimiser:
                                 working_directory="./tmp/")
         self.db = self.ws.add_database()
 
-    def run(self):
-        self.run_gams()
-
     def export_gdx(self):
         """
         Composes dataset for optimisation and exports it as GDX
@@ -102,24 +99,35 @@ class Optimiser:
         df['Vanna'] = greeks.vanna(df['Vega'], df['Underlying Price'], df['d1'], df['Vol'], df['Days'])
         df['Zomma'] = greeks.zomma(df['Gamma'], df['d2'], df['d1'], df['Vol'])
 
+        # Margins
+        # TODO: Margins are yet to me implemented
+        #  df <- addMargins(df, opt)
+        df["Marg l"] = 0
+        df["Marg s"] = 0
+
         # Create sets for data
-        s_greeks = data.create_set(self.db, "s_greeks", "List of greeks",
+        data.create_set(self.db, "s_greeks", "List of greeks",
                         ["delta", "gamma", "theta", "vega", "speed", "vanna", "zomma"])
-        s_names = data.create_set(self.db, "s_names", "Option names", df["Financial Instrument"])
-        s_side = data.create_set(self.db, "s_side", "Position side", ["long", "short"])
-        # data.create_set(self.db, "s_month", "Contract months", range(1, 6))  # TODO Should be len(unique(df$Days))
+        data.create_set(self.db, "s_names", "Option names", df["Financial Instrument"])
+        data.create_set(self.db, "s_side", "Position side", ["long", "short"])
+
+        levels, unis = pd.factorize(df['Days'])
+        df['Month'] = list(levels + 1)
+
+        data.create_set(self.db, "s_month", "Contract months",
+                        range(1, len(unis) + 1))
 
         # So now lets create the scalars
         data.create_scalar(self.db, "v_multiplier", "Instrument multiplier", self.opt["mult"])
         data.create_scalar(self.db, "v_max_delta", "Maximum delta allowed", self.opt["max.delta"])
         data.create_scalar(self.db, "v_max_gamma", "Maximum gamma allowed", self.opt["max.gamma"])
         data.create_scalar(self.db, "v_min_theta", "Minimum theta allowed", self.opt["min.theta"])
-        data.create_scalar(self.db, "v_min_vega", "Minimum vega allowed", self.opt["min.vega"])
+        data.create_scalar(self.db, "v_max_vega", "Maximum vega allowed", self.opt["max.vega"])
         data.create_scalar(self.db, "v_max_speed", "Maximum speed allowed", self.opt["max.speed"])
         data.create_scalar(self.db, "v_max_pos", "Maximum position allowed", self.opt["max.pos"])
         data.create_scalar(self.db, "v_max_pos_tot", "Maximum number of contracts", self.opt["max.pos.tot"])
         data.create_scalar(self.db, "v_alpha", "Relative importance of theta in obj function", self.opt["alpha"])
-        data.create_scalar(self.db, "v_max_trans_cost", "Transaction cost for one contract", self.opt["trans.cost"])
+        data.create_scalar(self.db, "v_trans_cost", "Transaction cost for one contract", self.opt["trans.cost"])
         data.create_scalar(self.db, "v_max_margin", "Maximum margin allowed", self.opt["max.margin"])
         data.create_scalar(self.db, "v_max_spread", "Maximum bid ask spread allowed", self.opt["max.spread"])
         data.create_scalar(self.db, "v_min_days", "Minimum days to expiry allowed", self.opt["min.days"])
@@ -136,9 +144,9 @@ class Optimiser:
                               "full",
                               df[["Financial Instrument", "Delta", "Gamma",
                                   "Theta", "Vega", "Speed", "Vanna", "Zomma"]])
-        # data.create_parameter(self.db, "p_margin", "Margin data for options",
-        #                      [df["Financial Instrument"], ["long", "short"]],
-        #                      "full", df[["Marg_l", "Marg_s"]])
+        data.create_parameter(self.db, "p_margin", "Margin data for options",
+                              [df["Financial Instrument"], ["long", "short"]],
+                              "full", df[["Financial Instrument", "Marg l", "Marg s"]])
         data.create_parameter(self.db, "p_side", "Option side (put/call)",
                               [df["Financial Instrument"], ["o_put", "o_call"]], "full",
                               df[["Financial Instrument", "Put", "Call"]])
@@ -146,8 +154,8 @@ class Optimiser:
                               df["Spread"])
         data.create_parameter(self.db, "p_days", "Days until expiry", [df["Financial Instrument"]], "sparse",
                               df["Days"] * 365)
-        # data.create_parameter(self.db, "p_months", "Months until expiry", [df["Financial Instrument"]], "sparse",
-        #                      [range(1, len(df)), df["Month"]])
+        data.create_parameter(self.db, "p_months", "Months until expiry", [df["Financial Instrument"]], "sparse",
+                              df["Month"])
 
         # All done, now export that to the GDX file
         self.db.export("input.gdx")
@@ -157,7 +165,8 @@ class Optimiser:
         Retrieves optimisation model from the model repo and runs it
         :return:
         """
-        model = self.ws.add_job_from_string("", )
+        model = self.ws.add_job_from_file("spo.gms")
+        opt = self.ws.add_options()
         model.run()
 
     def import_gdx(self, fn: str):
@@ -185,8 +194,8 @@ def main():
     """
     o = Optimiser()
     o.export_gdx()
-    # o.run()
-    # o.import_gdx("input.gdx")
+    o.run_gams()
+    o.import_gdx("output.gdx")
     # o.save_results_dynamo()
 
 

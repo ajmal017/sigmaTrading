@@ -42,7 +42,7 @@ trans.cost= 2.5
 max.delta=  0.05
 max.gamma=  0.30
 min.theta=  0.20
-min.vega=   0.20
+max.vega=   0.20
 max.speed=  0.01
 alpha=        1
 
