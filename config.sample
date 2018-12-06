@@ -30,7 +30,8 @@ mkt.table = mktData
 
 [optimiser]
 gams = c:\\gams\\win64\\24.3\\
-account= DU337774
+account= DU336474
+s3storage = my.bucket
 
 mult=       1000
 symbol=     CL

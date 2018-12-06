@@ -27,5 +27,5 @@ def rev_scale11(y, min_x, max_x):
     :param max_x: Original maximum
     :return:
     """
-    y = np.array(y)
+    # y = np.array(y)
     return min_x + ((y + 1) * (max_x - min_x)) / 2

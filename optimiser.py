@@ -23,7 +23,7 @@ class Optimiser:
 
         # Get the config
         # TODO: This config input should be in parameters
-        cf = "config.sample"
+        cf = "config.cf"
         self.config = configparser.ConfigParser()
         self.config.read(cf)
         gams_path = self.config["optimiser"]["gams"]
@@ -93,9 +93,7 @@ class Optimiser:
 
         # Margins
         # TODO: Margins are yet to me implemented
-        #  df <- addMargins(df, opt)
-        df["Marg l"] = 0
-        df["Marg s"] = 0
+        margins.add_margins(df, self.opt["s3storage"])
 
         # Create sets for data
         data.create_set(self.db, "s_greeks", "List of greeks",
@@ -169,12 +167,13 @@ class Optimiser:
         db_out = self.ws.add_database_from_gdx(fn)
         return db_out
 
-    def export_results_dynamo(self):
+    def export_results_dynamo(self, tbl: str):
         """
         Saves optimisation results to DynamoDB
+        :param tbl: Dynamo table that receives the opt. result data
         :return:
         """
-        self.logger.error("Not implemented")
+        self.logger.error("Import from " + tbl + " not implemented")
 
     def export_trades_xml(self):
         """

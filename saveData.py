@@ -13,11 +13,13 @@ import sys
 from datetime import datetime
 
 
-def write_dynamo(filename: str):
+def write_dynamo(filename: str, tbl: str, inst: str):
     """
     Main code for the snapshot upload
     :param filename Filename for CSV data
-    :return:
+    :param tbl: Target Dynamo DB table
+    :param inst: symbol to be written
+    :return: nothing
     """
     mod_time = os.path.getmtime(filename)
     df = pd.read_csv(filename)
@@ -26,15 +28,12 @@ def write_dynamo(filename: str):
     dtg = datetime.fromtimestamp(mod_time).strftime("%y%m%d%H%M%S")
 
     # Instrument
-    inst = "CL"
     data = df.to_json(orient="split")
 
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1',
                               endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
-    table = dynamodb.Table("mktData")
-    response = table.put_item(Item={"dtg": dtg,
-                                    "inst": inst,
-                                    "data": json.dumps(data)})
+    table = dynamodb.Table(tbl)
+    response = table.put_item(Item={"dtg": dtg, "inst": inst, "data": json.dumps(data)})
 
     return response
 
@@ -43,4 +42,4 @@ if __name__ == "__main__":
     """
     Main entry point for the program
     """
-    write_dynamo(sys.argv[1])
+    write_dynamo(sys.argv[1], "mktData", "CL")

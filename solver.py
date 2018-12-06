@@ -20,8 +20,6 @@ def optimise_portfolio(df: pd.DataFrame):
     sl = pyomo.opt.SolverFactory("glpk")
     sl.solve(model)
 
-    return
-
 
 if __name__ == "__main__":
     print("This code is not to be run directly, import it instead.")
