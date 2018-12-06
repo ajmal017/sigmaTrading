@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from quant import greeks, margins
 from gms import data
-import logger
+from utils import logger
 
 
 class Optimiser:

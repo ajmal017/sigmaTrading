@@ -4,7 +4,7 @@ Author: Peeter Meos
 Date: 6. november 2018
 """
 from tws import *
-from logger import *
+from utils.logger import *
 import pandas as pd
 
 

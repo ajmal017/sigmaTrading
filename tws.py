@@ -8,7 +8,7 @@ import time
 from ibapi.wrapper import *
 from ibapi.client import *
 from ibapi.ticktype import *
-from logger import *
+from utils.logger import *
 
 
 class TwsClient(EClient):

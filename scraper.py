@@ -5,7 +5,7 @@ We request 1 sec real time bars and save them to dynamo
 Peeter Meos
 21. November 2018
 """
-from logger import *
+from utils.logger import *
 from ibapi.wrapper import *
 from ibapi.client import *
 from threading import Thread

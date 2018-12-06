@@ -25,7 +25,7 @@ Required libs
 # TODO raise exception or quit when connection fails (or do something else?)
 from threading import Thread
 import time
-from logger import *
+from utils.logger import *
 from ibapi.wrapper import *
 from ibapi.client import *
 import configparser

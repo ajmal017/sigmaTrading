@@ -12,7 +12,7 @@ from datetime import timedelta
 from ibapi.client import *
 from ibapi.wrapper import *
 import ibapi.order_condition as order_condition
-from logger import *
+from utils.logger import *
 import configparser
 import getopt
 
