@@ -8,32 +8,21 @@ from gams import *
 import configparser
 import pandas as pd
 import numpy as np
-from quant import greeks
+from quant import greeks, margins
 from gms import data
-
-"""
-createGDX <- function(in.fn, in.gdx, opt, ignore.existing = FALSE) {
-
-  
-  df <- addMargins(df, opt)
-  
-  df$Month <- factor(df$Days, levels = unique(df$Days), labels = 1:length(unique(df$Days)))
-
-  if (ignore.existing == TRUE) {
-    df$long <- df$short <- 0 
-  } else {
-    df$long  <- ifelse(df$Position > 0,  df$Position, 0)
-    df$short <- ifelse(df$Position < 0, -df$Position, 0)
-  }
-
-  return(df)
-}
-"""
+import logger
 
 
 class Optimiser:
     def __init__(self):
+        """
+        Constructor initialises GAMS workspace and reads configuration
+        """
+
+        self.logger = logger.Logger(logger.LogLevel.normal, "Optimiser")
+
         # Get the config
+        # TODO: This config input should be in parameters
         cf = "config.sample"
         self.config = configparser.ConfigParser()
         self.config.read(cf)
@@ -45,12 +34,15 @@ class Optimiser:
                                 working_directory="./tmp/")
         self.db = self.ws.add_database()
 
-    def export_gdx(self):
+    def create_gdx(self):
         """
-        Composes dataset for optimisation and exports it as GDX
+        Composes dataset for optimisation and formats it as GDX
         Two options - whether we get it from a CSV or from DynamoDB
         :return:
         """
+        self.logger.log("Preparing optimiser input")
+
+        # TODO: This input file should be in parameters
         df = pd.read_csv("data/181105 options.csv", na_values="NoMD")
 
         # Eliminate all NA
@@ -157,17 +149,15 @@ class Optimiser:
         data.create_parameter(self.db, "p_months", "Months until expiry", [df["Financial Instrument"]], "sparse",
                               df["Month"])
 
-        # All done, now export that to the GDX file
-        self.db.export("input.gdx")
-
     def run_gams(self):
         """
         Retrieves optimisation model from the model repo and runs it
         :return:
         """
+        self.logger.log("Running GAMS job")
         model = self.ws.add_job_from_file("spo.gms")
-        opt = self.ws.add_options()
-        model.run()
+        # opt = self.ws.add_options()
+        model.run(databases=self.db)
 
     def import_gdx(self, fn: str):
         """
@@ -175,16 +165,23 @@ class Optimiser:
         :param fn: name and path of the GDX gdx file
         :return:
         """
-        print("Importing from " + fn)
+        self.logger.log("Importing from " + fn)
         db_out = self.ws.add_database_from_gdx(fn)
         return db_out
 
-    def save_results_dynamo(self):
+    def export_results_dynamo(self):
         """
         Saves optimisation results to DynamoDB
         :return:
         """
-        print("Not implemented")
+        self.logger.error("Not implemented")
+
+    def export_trades_xml(self):
+        """
+        Exports the list of trades in basket trader format
+        :return:
+        """
+        self.logger.error("Not implemented")
 
 
 def main():
@@ -193,7 +190,7 @@ def main():
     :return:
     """
     o = Optimiser()
-    o.export_gdx()
+    o.create_gdx()
     o.run_gams()
     o.import_gdx("output.gdx")
     # o.save_results_dynamo()

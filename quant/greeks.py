@@ -4,7 +4,6 @@ Code for calculation of more and less esoteric greeks.
 Author: Peeter Meos
 Date: 3. December 2018
 """
-import math
 from scipy.stats import norm
 import numpy as np
 
@@ -80,17 +79,17 @@ def speed(gamma, s, d1, sigma, t):
     return v
 
 
-def vanna(vega, s, d1, sigma, t):
+def vanna(v, s, d1, sigma, t):
     """
     Calculates d delta / d sigma
-    :param vega:
+    :param v:
     :param s:
     :param d1:
     :param sigma:
     :param t:
     :return:
     """
-    v = vega / s * (1 - d1 / (sigma * np.sqrt(t)))
+    v = v / s * (1 - d1 / (sigma * np.sqrt(t)))
     return v
 
 
@@ -121,7 +120,7 @@ def charm(side, d1, d2, r, q, sigma, t):
     :return:
     """
     v1 = np.exp(-q * t) * phi(d1) * (2 * (r - q) * t - d2 * sigma * np.sqrt(t)) / (2 * t * sigma * np.sqrt(t))
-
+    # TODO: This normal cdf is not vectorised. Thus possibly does not work properly
     v = q * np.exp(-q * t) * norm.cdf(d1) - v1 if side == "c" else -q * np.exp(-q * t) * norm.cdf(-d1) - v1
     return v
 

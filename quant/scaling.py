@@ -14,7 +14,7 @@ def scale11(x):
     :param x: numpy array
     :return:
     """
-    x = np.array(x)
+    # x = np.array(x)
     v = (2 * ((x - np.amin(x))/(np.amax(x) - np.amin(x)))) - 1
     return v
 
