@@ -1,7 +1,7 @@
 """
 Margin scraper.
 Code connects to TWS and saves margin data for instruments
-into Dynamo.
+into Dynamo. Ported from Java
 
 Author: Peeter Meos, Sigma Research OÜ
 Date: 2. December 2018

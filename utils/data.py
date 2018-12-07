@@ -10,7 +10,15 @@ import pandas as pd
 import os.path
 import json
 import sys
+import decimal
 from datetime import datetime
+
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, decimal.Decimal):
+            return str(o)
+        return super(DecimalEncoder, self).default(o)
 
 
 def write_dynamo(filename: str, tbl: str, inst: str):
