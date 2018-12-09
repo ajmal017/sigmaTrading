@@ -70,7 +70,6 @@ class Optimiser:
         # Volatility in percent
         df['Days'] = df['Days to Last Trading Day'] / 365
         df = df[df['Implied Vol. %'] != "N/A"]
-        df['Vol'] = df['Implied Vol. %']
         df['Vol'] = df['Implied Vol. %'].str.replace('%', '')
         df['Vol'] = df['Vol'].astype(float) / 100
         # TODO For whatever reason the following row does not work
