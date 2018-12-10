@@ -219,41 +219,44 @@ class Optimiser:
 
         self.logger.error("Import from " + tbl + " not implemented")
 
-    def export_trades_csv(self, d: dict, fn: str):
+    def export_trades_csv(self, fn: str):
         """
         Exports the list of trades in basket trader format (CSV)
         Action,Quantity,Symbol,SecType,LastTradingDayOrContractMonth,Strike,Right,Exchange,Currency,TimeInForce,OrderType,LmtPrice,BasketTag,Account,OrderRef,Multiplier,
         BUY,1,CL,FOP,20181114,53,C,NYMEX,USD,DAY,LMT,8.58,Basket,DU337774,Basket,1000,
 
-        :param d: dict with optimisation results
         :param fn: filename for exported data
         :return:
         """
         self.logger.log("Exporting trades basket to " + fn)
-        self.logger.error("Not implemented")
+
+        df_tmp = self.df[self.df["Trade"] != 0]
+        df_new = pd.DataFrame(np.where(df_tmp["Trade"] > 0, "BUY", "SELL"))
+        df_new["Quantity"] = np.abs(df_tmp["Trade"])
+        df_new["Symbol"] = self.config["optimiser"]["symbol"]
+        df_new["SecType"] = self.config["optimiser"]["sectype"]
+        # TODO: Expiry date of the instrument
+        # df.new$LastTradingDayOrContractMonth <- format(Sys.Date() + df$Days.to.Last.Trading.Day, format = "%Y%m%d")
+        df_new["LastTradingDayOrContractMonth"] = 0
+        df_new["Strike"] = df_tmp["Strike"]
+        df_new["Right"] = df_tmp["Side"].str.upper()
+        df_new["Exchange"] = self.config["optimiser"]["exchange"]
+        df_new["Currency"] = self.config["optimiser"]["currency"]
+        df_new["TimeInForce"] = "DAY"
+        df_new["OrderType"] = "LMT"
+        df_new["LmtPrice"] = df_tmp["Mid"]
+        df_new["BasketTag"] = "Basket"
+        df_new["Account"] = self.config["optimiser"]["account"]
+        df_new["OrderRef"] = "Basket"
+        df_new["Multiplier"] = self.config["optimiser"]["mult"]
+
         """
-        df.new <- data.frame(Action = rep("BUY", nrow(df)))
-        df.new$Action <- ifelse(df$Trade > 0, "BUY", "SELL")
-        df.new$Quantity <- abs(df$Trade)
-        df.new$Symbol <- opt$symbol
-        df.new$SecType <- opt$sectype
-        df.new$LastTradingDayOrContractMonth <- format(Sys.Date() + df$Days.to.Last.Trading.Day, format = "%Y%m%d")
-        df.new$Strike <- df$Strike
-        df.new$Right <- toupper(df$Side)
-        df.new$Exchange <- opt$exchange
-        df.new$Currency <- opt$currency
-        df.new$TimeInForce <- "DAY"
-        df.new$OrderType <- "LMT"
-        df.new$LmtPrice <- df$Mid
-        df.new$BasketTag <- "Basket"
-        df.new$Account <- opt$account
-        df.new$OrderRef <- "Basket"
-        df.new$Multiplier <- opt$mult
-  
         write.csv(df.new, 
             file=paste(file[1], format(Sys.Date(), format = "%y%m%d"),  file[2], ".csv", sep = ""),
             quote=FALSE, row.names = FALSE)
         """
+        # TODO: Check whether the quoting comes out nice
+        df_new.to_csv(fn, index=False)
 
 
 def main():
@@ -267,7 +270,7 @@ def main():
     d = o.import_gdx()
     o.add_trades_to_df(d)
     o.export_results_dynamo("optResults", d)
-    o.export_trades_csv(d, "./data/basket.csv")
+    o.export_trades_csv("./data/basket.csv")
 
 
 if __name__ == "__main__":
