@@ -11,6 +11,7 @@ import numpy as np
 from quant import greeks, margins
 from gms import data
 from utils import logger
+import boto3
 
 
 class Optimiser:
@@ -22,7 +23,6 @@ class Optimiser:
         self.logger = logger.Logger(logger.LogLevel.normal, "Optimiser")
 
         # Get the config
-        # TODO: This config input should be in parameters
         cf = "config.cf"
         self.config = configparser.ConfigParser()
         self.config.read(cf)
@@ -156,15 +156,74 @@ class Optimiser:
         # opt = self.ws.add_options()
         model.run(databases=self.db)
 
-    def import_gdx(self, fn: str):
+    def import_gdx(self, fn=None):
         """
         Imports optimisation results from the GDX file
-        :param fn: name and path of the GDX gdx file
+        :param fn: name and path of the GDX gdx file, if none given then default to _gams_py_gdb1.gdx
         :return:
         """
+        if fn is None:
+            fn = "_gams_py_gdb1.gdx"
+
         self.logger.log("Importing from " + fn)
-        db_out = self.ws.add_database_from_gdx(fn)
-        return db_out
+        db_out = self.ws.add_database_from_gdx(gdx_file_name=fn, database_name="results")
+
+        # Initialise output dict, enumerate the results and read them from GDX
+        d = {}
+        t = ["trades", "pos_greeks", "total_greeks", "total_pos", "total_margin", "monthly_greeks"]
+        for i in t:
+            d[i] = data.read_gdx_param(db_out, i)
+
+        # After parameters, add variables
+        d["x"] = data.read_gdx_var(db_out, "x")
+        d["z"] = data.read_gdx_var(db_out, "z")
+        self.logger.log("Objective function value " + str(next(iter(d["z"].values()))))
+
+        # And we are done
+        return d
+
+    def add_trades_to_df(self):
+        """
+        Adds greeks to optimiser results
+        :return:
+        """
+        """
+        df <- read.csv(in.fn)
+        df$Financial.Instrument <- as.character(df$Financial.Instrument)
+        df$Position[is.na(df$Position)] <- 0
+  
+        x1 <- dcast(x$x, s_names~s_side, fill = 0, value.var = "val")
+  
+        df <- df[order(df$Financial.Instrument), ]
+        x1 <- x1[order(x1$s_names), ]
+  
+        df <- base::merge(df, x1, by.x = "Financial.Instrument", by.y = "s_names")
+  
+        #df <- df[df$Financial.Instrument %in% x$total.pos$s_names,]
+        df$NewPosition <-  ifelse(is.na(df$Position), 0, df$Position)
+        df$Trade <- df$long - df$short
+        df$NewPosition[df$Trade != 0] <- df$Position[df$Trade != 0] + df$Trade[df$Trade != 0]  
+        df <- df[df$NewPosition != 0 | df$Position != 0,]
+        #df <- df[!is.na(df$NewPosition), ]
+
+        df$Side <- "c"
+        df$Side[grepl("PUT", df$Financial.Instrument)] <- "p"
+  
+        df$Days <- df$Days.to.Last.Trading.Day / 365
+
+        df$Implied.Vol... <- as.character(df$Implied.Vol...)
+        df$Vol <- as.double(substr(df$Implied.Vol..., 1, nchar(df$Implied.Vol...) - 1)) / 100
+
+        df$Strike <- 0
+        for (i in 1:nrow(df)) {
+            df$Strike[i] <- as.double(unlist(strsplit(df$Financial.Instrument[i], split = " "))[5])
+        }
+      
+          df <- addMargins(df, opt)
+  
+        """
+        self.logger.log("Adding optimised positions not implemented")
+        pass
 
     def export_results_dynamo(self, tbl: str):
         """
@@ -172,6 +231,14 @@ class Optimiser:
         :param tbl: Dynamo table that receives the opt. result data
         :return:
         """
+        self.logger.log("Exporting optimisation results to Dynamo DB")
+
+        db = boto3.resource('dynamodb', region_name='us-east-1',
+                            endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
+        table = db.Table(tbl)
+        j = table.scan()
+        print(j.keys())
+
         self.logger.error("Import from " + tbl + " not implemented")
 
     def export_trades_xml(self):
@@ -179,6 +246,7 @@ class Optimiser:
         Exports the list of trades in basket trader format
         :return:
         """
+        self.logger.log("Exporting trades basket")
         self.logger.error("Not implemented")
 
 
@@ -189,9 +257,10 @@ def main():
     """
     o = Optimiser()
     o.create_gdx()
-    o.run_gams()
-    o.import_gdx("output.gdx")
-    # o.save_results_dynamo()
+    #o.run_gams()
+    o.import_gdx()
+    #o.export_results_dynamo("optResults")
+    #o.export_trades_xml()
 
 
 if __name__ == "__main__":

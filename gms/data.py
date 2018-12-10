@@ -62,3 +62,26 @@ def create_set(db: GamsDatabase, name, desc, val, dim=1):
     v = db.add_set(name, dim, explanatory_text=desc)
     for i in val:
         v.add_record(str(i))
+
+
+def read_gdx_param(db: GamsDatabase, tbl: str) -> dict:
+    """
+    Reads a table from GDX
+    :param db: GAMS Database
+    :param tbl: table name to be read
+    :return:
+    """
+    d = dict((tuple(rec.keys), rec.value) for rec in db[tbl])
+    return d
+
+
+def read_gdx_var(db: GamsDatabase, var: str) -> dict:
+    """
+    Reads a variable from GDX
+    :param db: GAMS database
+    :param var: variable name to be read
+    :return:
+    """
+    d = dict((tuple(rec.keys), rec.level) for rec in db[var])
+    return d
+

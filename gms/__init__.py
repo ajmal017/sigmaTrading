@@ -7,7 +7,7 @@ Copyright (C) 2018 Sigma Research OÜ. All rights reserved.
 VERSION = {
     'major': 0,
     'minor': 1,
-    'micro': 3}
+    'micro': 4}
 
 
 def get_version_string():
@@ -17,4 +17,4 @@ def get_version_string():
 
 __version__ = get_version_string()
 
-__all__ = ["data", "gdx.py"]
+__all__ = ["data", "gdx", "code"]

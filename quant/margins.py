@@ -103,7 +103,7 @@ def add_margins(df: pd.DataFrame, s3: str):
 
     # Prepare data frame
     df['num_side'] = np.where(df['Financial Instrument'].str.contains("PUT"), -1, 1)
-    df["Mny"] = df["num_side"] * np.log(df["ulPrice"] / df["Strike"])
+    df["Mny"] = df["num_side"] * np.log(df["Underlying Price"] / df["Strike"])
     df["Days scaled"] = df["Days to Last Trading Day"] / 365
 
     # Compute margins
