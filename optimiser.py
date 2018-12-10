@@ -33,6 +33,7 @@ class Optimiser:
                                 debug=DebugLevel.KeepFiles,
                                 working_directory="./tmp/")
         self.db = self.ws.add_database()
+        self.df = pd.DataFrame()
 
     def create_gdx(self):
         """
@@ -43,65 +44,67 @@ class Optimiser:
         self.logger.log("Preparing optimiser input")
 
         # TODO: This input file should be in parameters
-        df = pd.read_csv("data/181105 options.csv", na_values="NoMD")
+        self.df = pd.read_csv("data/181105 options.csv", na_values="NoMD")
 
         # Eliminate all NA
         # df.loc[df['column_name'].isin(some_values)]
-        df = df[pd.notnull(df['Mid'])]
-        df = df[pd.notnull(df['Delta'])]
-        df = df[pd.notnull(df['Gamma'])]
-        df = df[pd.notnull(df['Theta'])]
-        df = df[pd.notnull(df['Vega'])]
-        df = df[pd.notnull(df['Implied Vol. %'])]
+        self.df = self.df[pd.notnull(self.df['Mid'])]
+        self.df = self.df[pd.notnull(self.df['Delta'])]
+        self.df = self.df[pd.notnull(self.df['Gamma'])]
+        self.df = self.df[pd.notnull(self.df['Theta'])]
+        self.df = self.df[pd.notnull(self.df['Vega'])]
+        self.df = self.df[pd.notnull(self.df['Implied Vol. %'])]
         # TODO: The following need to be fixed probably
         # df['Position'] = np.where(df['Position'].isnull(), 0, df['Position'])
 
         # Add sides
-        df['Financial Instrument'] = df['Financial Instrument'].astype(str)
-        df['Side'] = np.where(df['Financial Instrument'].str.contains("PUT"), "p", "c")
+        self.df['Financial Instrument'] = self.df['Financial Instrument'].astype(str)
+        self.df['Side'] = np.where(self.df['Financial Instrument'].str.contains("PUT"), "p", "c")
 
-        df['Put'] = np.where(df['Side'] == "p", 1, 0)
-        df['Call'] = np.where(df['Side'] == "c", 1, 0)
+        self.df['Put'] = np.where(self.df['Side'] == "p", 1, 0)
+        self.df['Call'] = np.where(self.df['Side'] == "c", 1, 0)
 
-        # TODO: This also probably does not work
-        df['long'] = np.where(df['Position'] > 0, df['Position'], 0)
-        df['short'] = np.where(df['Position'] < 0, -df['Position'], 0)
+        self.df['long'] = np.where(self.df['Position'] > 0, self.df['Position'], 0)
+        self.df['short'] = np.where(self.df['Position'] < 0, -self.df['Position'], 0)
 
         # Volatility in percent
-        df['Days'] = df['Days to Last Trading Day'] / 365
-        df = df[df['Implied Vol. %'] != "N/A"]
-        df['Vol'] = df['Implied Vol. %'].str.replace('%', '')
-        df['Vol'] = df['Vol'].astype(float) / 100
+        self.df['Days'] = self.df['Days to Last Trading Day'] / 365
+        self.df = self.df[self.df['Implied Vol. %'] != "N/A"]
+        self.df['Vol'] = self.df['Implied Vol. %'].str.replace('%', '')
+        self.df['Vol'] = self.df['Vol'].astype(float) / 100
         # TODO For whatever reason the following row does not work
         # df = df[pd.notnull(df['Vol'])]
 
         # Strikes
-        df['Strike'] = df['Financial Instrument'].str.split(" ").map(lambda x: x[4])
-        df['Strike'] = df['Strike'].astype(float)
+        self.df['Strike'] = self.df['Financial Instrument'].str.split(" ").map(lambda x: x[4])
+        self.df['Strike'] = self.df['Strike'].astype(float)
 
         # Add greeks
-        df['Underlying Price'] = df['Underlying Price'].as_matrix()
-        df['Strike'] = df['Strike'].as_matrix()
-        df['Vol'] = df['Vol'].as_matrix()
-        df['Days'] = df['Days'].as_matrix()
-        df['d1'] = greeks.d_one(df['Underlying Price'], df['Strike'], 0.01, 0, df['Vol'], df['Days'])
-        df['d2'] = greeks.d_two(df['Underlying Price'], df['Strike'], 0.01, 0, df['Vol'], df['Days'])
-        df['Speed'] = greeks.speed(df['Gamma'], df['Underlying Price'], df['d1'], df['Vol'], df['Days'])
-        df['Vanna'] = greeks.vanna(df['Vega'], df['Underlying Price'], df['d1'], df['Vol'], df['Days'])
-        df['Zomma'] = greeks.zomma(df['Gamma'], df['d2'], df['d1'], df['Vol'])
+        self.df['Underlying Price'] = self.df['Underlying Price'].as_matrix()
+        self.df['Strike'] = self.df['Strike'].as_matrix()
+        self.df['Vol'] = self.df['Vol'].as_matrix()
+        self.df['Days'] = self.df['Days'].as_matrix()
+        self.df['d1'] = greeks.d_one(self.df['Underlying Price'], self.df['Strike'], 0.01, 0,
+                                     self.df['Vol'], self.df['Days'])
+        self.df['d2'] = greeks.d_two(self.df['Underlying Price'], self.df['Strike'], 0.01, 0,
+                                     self.df['Vol'], self.df['Days'])
+        self.df['Speed'] = greeks.speed(self.df['Gamma'], self.df['Underlying Price'], self.df['d1'],
+                                        self.df['Vol'], self.df['Days'])
+        self.df['Vanna'] = greeks.vanna(self.df['Vega'], self.df['Underlying Price'], self.df['d1'],
+                                        self.df['Vol'], self.df['Days'])
+        self.df['Zomma'] = greeks.zomma(self.df['Gamma'], self.df['d2'], self.df['d1'], self.df['Vol'])
 
         # Margins
-        # TODO: Margins are yet to me implemented
-        margins.add_margins(df, self.opt["s3storage"])
+        margins.add_margins(self.df, self.opt["s3storage"])
 
         # Create sets for data
         data.create_set(self.db, "s_greeks", "List of greeks",
                         ["delta", "gamma", "theta", "vega", "speed", "vanna", "zomma"])
-        data.create_set(self.db, "s_names", "Option names", df["Financial Instrument"])
+        data.create_set(self.db, "s_names", "Option names", self.df["Financial Instrument"])
         data.create_set(self.db, "s_side", "Position side", ["long", "short"])
 
-        levels, unis = pd.factorize(df['Days'])
-        df['Month'] = list(levels + 1)
+        levels, unis = pd.factorize(self.df['Days'])
+        self.df['Month'] = list(levels + 1)
 
         data.create_set(self.db, "s_month", "Contract months",
                         range(1, len(unis) + 1))
@@ -125,26 +128,26 @@ class Optimiser:
 
         # Parameter now the multi-dimensional parameters
         data.create_parameter(self.db, "p_y", "Existing position data",
-                              [df["Financial Instrument"], ["long", "short"]], "full",
-                              df[["Financial Instrument", "long", "short"]])
+                              [self.df["Financial Instrument"], ["long", "short"]], "full",
+                              self.df[["Financial Instrument", "long", "short"]])
         data.create_parameter(self.db, "p_greeks", "Greeks data",
-                              [df["Financial Instrument"],
+                              [self.df["Financial Instrument"],
                                ["delta", "gamma", "theta", "vega", "speed", "vanna", "zomma"]],
                               "full",
-                              df[["Financial Instrument", "Delta", "Gamma",
-                                  "Theta", "Vega", "Speed", "Vanna", "Zomma"]])
+                              self.df[["Financial Instrument", "Delta", "Gamma",
+                                       "Theta", "Vega", "Speed", "Vanna", "Zomma"]])
         data.create_parameter(self.db, "p_margin", "Margin data for options",
-                              [df["Financial Instrument"], ["long", "short"]],
-                              "full", df[["Financial Instrument", "Marg l", "Marg s"]])
+                              [self.df["Financial Instrument"], ["long", "short"]],
+                              "full", self.df[["Financial Instrument", "Marg l", "Marg s"]])
         data.create_parameter(self.db, "p_side", "Option side (put/call)",
-                              [df["Financial Instrument"], ["o_put", "o_call"]], "full",
-                              df[["Financial Instrument", "Put", "Call"]])
-        data.create_parameter(self.db, "p_spread", "Bid ask spread", [df["Financial Instrument"]], "sparse",
-                              df["Spread"])
-        data.create_parameter(self.db, "p_days", "Days until expiry", [df["Financial Instrument"]], "sparse",
-                              df["Days"] * 365)
-        data.create_parameter(self.db, "p_months", "Months until expiry", [df["Financial Instrument"]], "sparse",
-                              df["Month"])
+                              [self.df["Financial Instrument"], ["o_put", "o_call"]], "full",
+                              self.df[["Financial Instrument", "Put", "Call"]])
+        data.create_parameter(self.db, "p_spread", "Bid ask spread", [self.df["Financial Instrument"]], "sparse",
+                              self.df["Spread"])
+        data.create_parameter(self.db, "p_days", "Days until expiry", [self.df["Financial Instrument"]], "sparse",
+                              self.df["Days"] * 365)
+        data.create_parameter(self.db, "p_months", "Months until expiry", [self.df["Financial Instrument"]], "sparse",
+                              self.df["Month"])
 
     def run_gams(self):
         """
@@ -182,53 +185,29 @@ class Optimiser:
         # And we are done
         return d
 
-    def add_trades_to_df(self):
+    def add_trades_to_df(self, res: dict):
         """
-        Adds greeks to optimiser results
+        Adds optimiser results to the market data snapshot data frame
+        :param res: List containing decision variable values (ie, trades)
         :return:
         """
-        """
-        df <- read.csv(in.fn)
-        df$Financial.Instrument <- as.character(df$Financial.Instrument)
-        df$Position[is.na(df$Position)] <- 0
-  
-        x1 <- dcast(x$x, s_names~s_side, fill = 0, value.var = "val")
-  
-        df <- df[order(df$Financial.Instrument), ]
-        x1 <- x1[order(x1$s_names), ]
-  
-        df <- base::merge(df, x1, by.x = "Financial.Instrument", by.y = "s_names")
-  
-        #df <- df[df$Financial.Instrument %in% x$total.pos$s_names,]
-        df$NewPosition <-  ifelse(is.na(df$Position), 0, df$Position)
-        df$Trade <- df$long - df$short
-        df$NewPosition[df$Trade != 0] <- df$Position[df$Trade != 0] + df$Trade[df$Trade != 0]  
-        df <- df[df$NewPosition != 0 | df$Position != 0,]
-        #df <- df[!is.na(df$NewPosition), ]
+        self.logger.log("Adding positions to the data frame")
+        x = pd.Series(res["trades"]).reset_index()
+        x = pd.DataFrame(x)
+        x.columns = ["Financial Instrument", "side", "q"]
+        x = x.pivot(index="Financial Instrument", columns="side", values="q").fillna(0)
+        self.df = self.df.join(x, on="Financial Instrument", rsuffix="_x")
+        self.df = self.df.fillna(0)
 
-        df$Side <- "c"
-        df$Side[grepl("PUT", df$Financial.Instrument)] <- "p"
-  
-        df$Days <- df$Days.to.Last.Trading.Day / 365
+        # Some final calculations on traded quantities
+        self.df["Trade"] = self.df["buy"] - self.df["sell"]
+        self.df["NewPosition"] = self.df["Position"] + self.df["Trade"]
 
-        df$Implied.Vol... <- as.character(df$Implied.Vol...)
-        df$Vol <- as.double(substr(df$Implied.Vol..., 1, nchar(df$Implied.Vol...) - 1)) / 100
-
-        df$Strike <- 0
-        for (i in 1:nrow(df)) {
-            df$Strike[i] <- as.double(unlist(strsplit(df$Financial.Instrument[i], split = " "))[5])
-        }
-      
-          df <- addMargins(df, opt)
-  
-        """
-        self.logger.log("Adding optimised positions not implemented")
-        pass
-
-    def export_results_dynamo(self, tbl: str):
+    def export_results_dynamo(self, tbl: str, dt: dict):
         """
         Saves optimisation results to DynamoDB
         :param tbl: Dynamo table that receives the opt. result data
+        :param dt: List of data returned by the optimiser
         :return:
         """
         self.logger.log("Exporting optimisation results to Dynamo DB")
@@ -236,18 +215,45 @@ class Optimiser:
         db = boto3.resource('dynamodb', region_name='us-east-1',
                             endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
         table = db.Table(tbl)
-        j = table.scan()
-        print(j.keys())
+        # table.put_item()
 
         self.logger.error("Import from " + tbl + " not implemented")
 
-    def export_trades_xml(self):
+    def export_trades_csv(self, d: dict, fn: str):
         """
-        Exports the list of trades in basket trader format
+        Exports the list of trades in basket trader format (CSV)
+        Action,Quantity,Symbol,SecType,LastTradingDayOrContractMonth,Strike,Right,Exchange,Currency,TimeInForce,OrderType,LmtPrice,BasketTag,Account,OrderRef,Multiplier,
+        BUY,1,CL,FOP,20181114,53,C,NYMEX,USD,DAY,LMT,8.58,Basket,DU337774,Basket,1000,
+
+        :param d: dict with optimisation results
+        :param fn: filename for exported data
         :return:
         """
-        self.logger.log("Exporting trades basket")
+        self.logger.log("Exporting trades basket to " + fn)
         self.logger.error("Not implemented")
+        """
+        df.new <- data.frame(Action = rep("BUY", nrow(df)))
+        df.new$Action <- ifelse(df$Trade > 0, "BUY", "SELL")
+        df.new$Quantity <- abs(df$Trade)
+        df.new$Symbol <- opt$symbol
+        df.new$SecType <- opt$sectype
+        df.new$LastTradingDayOrContractMonth <- format(Sys.Date() + df$Days.to.Last.Trading.Day, format = "%Y%m%d")
+        df.new$Strike <- df$Strike
+        df.new$Right <- toupper(df$Side)
+        df.new$Exchange <- opt$exchange
+        df.new$Currency <- opt$currency
+        df.new$TimeInForce <- "DAY"
+        df.new$OrderType <- "LMT"
+        df.new$LmtPrice <- df$Mid
+        df.new$BasketTag <- "Basket"
+        df.new$Account <- opt$account
+        df.new$OrderRef <- "Basket"
+        df.new$Multiplier <- opt$mult
+  
+        write.csv(df.new, 
+            file=paste(file[1], format(Sys.Date(), format = "%y%m%d"),  file[2], ".csv", sep = ""),
+            quote=FALSE, row.names = FALSE)
+        """
 
 
 def main():
@@ -257,10 +263,11 @@ def main():
     """
     o = Optimiser()
     o.create_gdx()
-    #o.run_gams()
-    o.import_gdx()
-    #o.export_results_dynamo("optResults")
-    #o.export_trades_xml()
+    # o.run_gams()
+    d = o.import_gdx()
+    o.add_trades_to_df(d)
+    o.export_results_dynamo("optResults", d)
+    o.export_trades_csv(d, "./data/basket.csv")
 
 
 if __name__ == "__main__":

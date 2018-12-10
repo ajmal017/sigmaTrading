@@ -17,4 +17,4 @@ def get_version_string():
 
 __version__ = get_version_string()
 
-__all__ = ["data", "gdx", "code"]
+__all__ = ["data", "code"]
