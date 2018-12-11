@@ -68,8 +68,5 @@ def get_mkt_data_dynamo(tbl: str, inst: str, dtg=None):
     return response
 
 
-if __name__ == "__main__":
-    """
-    Main entry point for the program
-    """
-    write_dynamo(sys.argv[1], "mktData", "CL")
+
+

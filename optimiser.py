@@ -12,10 +12,12 @@ from quant import greeks, margins
 from gms import data
 from utils import logger
 import boto3
+import datetime
+import os
 
 
 class Optimiser:
-    def __init__(self):
+    def __init__(self, fn: str):
         """
         Constructor initialises GAMS workspace and reads configuration
         """
@@ -34,6 +36,8 @@ class Optimiser:
                                 working_directory="./tmp/")
         self.db = self.ws.add_database()
         self.df = pd.DataFrame()
+        self.data_date = datetime.date.today()
+        self.fn = fn
 
     def create_gdx(self):
         """
@@ -43,8 +47,10 @@ class Optimiser:
         """
         self.logger.log("Preparing optimiser input")
 
-        # TODO: This input file should be in parameters
-        self.df = pd.read_csv("data/181105 options.csv", na_values="NoMD")
+        self.df = pd.read_csv(self.fn, na_values="NoMD")
+
+        # Update data update date
+        self.data_date = datetime.date.fromtimestamp(os.path.getmtime(self.fn))
 
         # Eliminate all NA
         # df.loc[df['column_name'].isin(some_values)]
@@ -231,32 +237,45 @@ class Optimiser:
         self.logger.log("Exporting trades basket to " + fn)
 
         df_tmp = self.df[self.df["Trade"] != 0]
+
         df_new = pd.DataFrame(np.where(df_tmp["Trade"] > 0, "BUY", "SELL"))
-        df_new["Quantity"] = np.abs(df_tmp["Trade"])
+        df_new.columns = ["Action"]
+        df_new["Quantity"] = np.abs(df_tmp["Trade"].astype(int)).tolist()
         df_new["Symbol"] = self.config["optimiser"]["symbol"]
         df_new["SecType"] = self.config["optimiser"]["sectype"]
-        # TODO: Expiry date of the instrument
-        # df.new$LastTradingDayOrContractMonth <- format(Sys.Date() + df$Days.to.Last.Trading.Day, format = "%Y%m%d")
-        df_new["LastTradingDayOrContractMonth"] = 0
-        df_new["Strike"] = df_tmp["Strike"]
-        df_new["Right"] = df_tmp["Side"].str.upper()
+
+        d = pd.TimedeltaIndex(data=df_tmp["Days to Last Trading Day"], unit="D")
+        df_new["LastTradingDayOrContractMonth"] = pd.to_datetime(self.data_date) + d
+        df_new["LastTradingDayOrContractMonth"] = df_new["LastTradingDayOrContractMonth"].dt.strftime("%Y%m%d")
+
+        df_new["Strike"] = df_tmp["Strike"].tolist()
+        df_new["Right"] = df_tmp["Side"].str.upper().tolist()
         df_new["Exchange"] = self.config["optimiser"]["exchange"]
         df_new["Currency"] = self.config["optimiser"]["currency"]
         df_new["TimeInForce"] = "DAY"
         df_new["OrderType"] = "LMT"
-        df_new["LmtPrice"] = df_tmp["Mid"]
+        df_new["LmtPrice"] = df_tmp["Mid"].tolist()
         df_new["BasketTag"] = "Basket"
         df_new["Account"] = self.config["optimiser"]["account"]
         df_new["OrderRef"] = "Basket"
         df_new["Multiplier"] = self.config["optimiser"]["mult"]
 
-        """
-        write.csv(df.new, 
-            file=paste(file[1], format(Sys.Date(), format = "%y%m%d"),  file[2], ".csv", sep = ""),
-            quote=FALSE, row.names = FALSE)
-        """
-        # TODO: Check whether the quoting comes out nice
         df_new.to_csv(fn, index=False)
+        remove_last_csv_newline(fn)
+
+
+def remove_last_csv_newline(fn: str):
+    """
+    Removes newline from the last row of CSV file
+    :param fn: filename
+    :return:
+    """
+    with open(fn) as f:
+        lines = f.readlines()
+        last = len(lines) - 1
+        lines[last] = lines[last].replace('\r', '').replace('\n', '')
+    with open(fn, 'w') as wr:
+        wr.writelines(lines)
 
 
 def main():
@@ -264,7 +283,7 @@ def main():
     Main optimisation code
     :return:
     """
-    o = Optimiser()
+    o = Optimiser("data/181105 options.csv")
     o.create_gdx()
     # o.run_gams()
     d = o.import_gdx()

@@ -7,7 +7,7 @@ Copyright (C) 2018 Sigma Research OÜ. All rights reserved.
 VERSION = {
     'major': 0,
     'minor': 1,
-    'micro': 4}
+    'micro': 5}
 
 
 def get_version_string():

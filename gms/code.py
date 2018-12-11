@@ -25,4 +25,14 @@ def upload_code(tbl: str, fn: str, version=None):
     :param version: Optional version string
     :return:
     """
-    pass
+    # Read the file as one long string
+    with open(fn, 'r') as m:
+        data = m.read()
+
+    print(data)
+
+    # Open the data table and insert item
+    db = boto3.resource('dynamodb', region_name='us-east-1',
+                        endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
+    table = db.Table(tbl)
+    table.put_item({"data": data})
