@@ -5,6 +5,8 @@ Author: Peeter Meos
 Date: 3. December 2018
 """
 from gams import GamsDatabase, GamsParameter
+import pandas as pd
+import json
 
 
 def create_parameter(db: GamsDatabase, name, desc, uel, form, val):
@@ -62,7 +64,7 @@ def create_set(db: GamsDatabase, name, desc, val, dim=1):
         v.add_record(str(i))
 
 
-def read_gdx_param(db: GamsDatabase, tbl: str) -> list:
+def read_gdx_param(db: GamsDatabase, tbl: str) -> pd.DataFrame:
     """
     Reads a table from GDX
     :param db: GAMS Database
@@ -77,10 +79,10 @@ def read_gdx_param(db: GamsDatabase, tbl: str) -> list:
         d_tmp = {}
         for j in range(0, len(n)):
             d_tmp[n[j]] = i.keys[j]
-        d_tmp["value"] = i.value
+        d_tmp["val"] = round(i.value, 3)
         lst.append(d_tmp)
     # d = dict((tuple(rec.keys), rec.value) for rec in db[tbl])
-    return lst
+    return pd.read_json(json.dumps(lst), orient="records")
 
 
 def read_gdx_var(db: GamsDatabase, var: str) -> dict:

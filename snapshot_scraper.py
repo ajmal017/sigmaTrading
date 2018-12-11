@@ -36,6 +36,9 @@ class Snapshot(TwsWrapper, EClient):
         TwsWrapper.__init__(self)
         EClient.__init__(self, wrapper=self)
 
+        # TODO: Add logging, or perhaps create a generic trader class with logging already
+        #  included
+
         self.chain = []
         self.nextId = -1
 
@@ -184,6 +187,7 @@ class Snapshot(TwsWrapper, EClient):
         for i in self.chain:
             if i["id"] == order_id:
                 print(str(i["strike"]) + " " + i["side"])
+                # TODO: Round those to nearest integers
                 i["i_margin"] = order_state.initMarginChange
                 i["m_margin"] = order_state.maintMarginChange
 
@@ -225,7 +229,7 @@ class Snapshot(TwsWrapper, EClient):
         table = dynamodb.Table(tbl)
         # TODO: This needs to be in proper format
         # {"inst": self.cont.symbol, "date": dtg, "data":}
-        table.put_item()
+        #table.put_item()
         print(self.chain)
 
 

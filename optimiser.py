@@ -172,6 +172,15 @@ class Optimiser(PortfolioStrategy):
         for i in t:
             d[i] = data.read_gdx_param(db_out, i)
 
+        d["total_greeks"] = d["total_greeks"].pivot(index="s_greeks", columns="s_age", values="val")
+        d["total_greeks"].reset_index(level=0, inplace=True)
+
+        # Dual indexes are a bitch, is there a better way?
+        d["monthly_greeks"] = d["monthly_greeks"].set_index(["s_greeks", "s_month", "s_age"]).unstack(level=-1)
+        d["monthly_greeks"].reset_index(level=1, inplace=True)
+        d["monthly_greeks"].columns = ["s_month", "new", "old"]
+        d["monthly_greeks"]["s_greeks"] = d["monthly_greeks"].index
+
         # After parameters, add variables
         d["x"] = data.read_gdx_var(db_out, "x")
         d["z"] = data.read_gdx_var(db_out, "z")
@@ -188,7 +197,7 @@ class Optimiser(PortfolioStrategy):
         """
         self.logger.log("Adding positions to the data frame")
 
-        x = pd.read_json(json.dumps(res["trades"]), orient="records")
+        x = res["trades"]
         x.columns = ["Financial Instrument", "side", "q"]
         x = x.pivot(index="Financial Instrument", columns="side", values="q").fillna(0)
 
@@ -206,15 +215,17 @@ class Optimiser(PortfolioStrategy):
         :param dt: List of data returned by the optimiser
         :return:
         """
+        dt["trades"].columns = ["s_names", "s_trade", "val"]
+
         d = {"dtg": self.data_date.strftime("%y%m%d%H%M%S"),
-             "data": self.df,
-             "greeks": dt["total_greeks"],
+             "data": self.df.to_json(orient="split"),
+             "greeks": dt["total_greeks"].to_json(orient="records"),
              "live": False,
-             "margin": dt["total_margin"],
-             "opt": self.opt,
-             "pos": dt["total_pos"],
-             "trades": dt["trades"],
-             "monGreeks": dt["monthly_greeks"]}
+             "margin": dt["total_margin"].to_json(orient="records"),
+             "opt": json.dumps(dict(self.opt)),
+             "pos": dt["total_pos"].to_json(orient="records"),
+             "trades": dt["trades"].to_json(orient="records"),
+             "monGreeks": dt["monthly_greeks"].to_json(orient="records")}
 
         self.logger.log("Exporting optimisation results to Dynamo DB")
 
@@ -222,10 +233,11 @@ class Optimiser(PortfolioStrategy):
                             endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
         table = db.Table(tbl)
         # TODO: This Dynamo upload here needs to be tested!
-        # response = table.put_item(Item=d)
+        #  Position data is somehow weird
+        #  Data frame headers for data are different in R and Python!
+        response = table.put_item(Item=d)
 
-        #self.logger.log(response)
-        self.logger.error("Import from " + tbl + " not implemented")
+        self.logger.log(str(response))
 
     def export_trades_csv(self, fn: str):
         """
@@ -286,9 +298,9 @@ def main():
     :return:
     """
     o = Optimiser("config.cf")
-    o.get_mkt_data_csv("data/181105 options.csv")
+    o.get_mkt_data_csv("data/181211 options.csv")
     o.create_gdx()
-    o.run_gams()
+    # o.run_gams()
     d = o.import_gdx()
     o.add_trades_to_df(d)
     o.export_results_dynamo("optResults", d)
