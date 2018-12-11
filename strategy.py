@@ -52,4 +52,3 @@ class PortfolioStrategy:
         """
         self.df = pd.read_csv(fn, na_values="NoMD")
         self.data_date = datetime.datetime.fromtimestamp(os.path.getmtime(fn))
-
