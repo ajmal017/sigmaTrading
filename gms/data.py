@@ -4,8 +4,7 @@ Utility functions for GAMS GDX creation
 Author: Peeter Meos
 Date: 3. December 2018
 """
-from gams import GamsDatabase
-from gams import GamsParameter
+from gams import GamsDatabase, GamsParameter
 
 
 def create_parameter(db: GamsDatabase, name, desc, uel, form, val):
@@ -44,7 +43,6 @@ def create_scalar(db: GamsDatabase, name, desc, val):
     v = db.add_parameter(name, 0, explanatory_text=desc)
     v.add_record().value = float(val)
 
-    # Is this necessary?
     return v
 
 
@@ -64,15 +62,25 @@ def create_set(db: GamsDatabase, name, desc, val, dim=1):
         v.add_record(str(i))
 
 
-def read_gdx_param(db: GamsDatabase, tbl: str) -> dict:
+def read_gdx_param(db: GamsDatabase, tbl: str) -> list:
     """
     Reads a table from GDX
     :param db: GAMS Database
     :param tbl: table name to be read
     :return:
     """
-    d = dict((tuple(rec.keys), rec.value) for rec in db[tbl])
-    return d
+    n = []
+    lst = []
+    for i in db.get_parameter(tbl).domains:
+        n.append(i.name)
+    for i in db[tbl]:
+        d_tmp = {}
+        for j in range(0, len(n)):
+            d_tmp[n[j]] = i.keys[j]
+        d_tmp["value"] = i.value
+        lst.append(d_tmp)
+    # d = dict((tuple(rec.keys), rec.value) for rec in db[tbl])
+    return lst
 
 
 def read_gdx_var(db: GamsDatabase, var: str) -> dict:
@@ -84,4 +92,3 @@ def read_gdx_var(db: GamsDatabase, var: str) -> dict:
     """
     d = dict((tuple(rec.keys), rec.level) for rec in db[var])
     return d
-

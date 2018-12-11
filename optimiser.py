@@ -5,39 +5,33 @@ Author: Peeter Meos, Sigma Research OÜ
 Date: 2. December 2018
 """
 from gams import *
-import configparser
 import pandas as pd
 import numpy as np
+from strategy import PortfolioStrategy
 from quant import greeks, margins
 from gms import data
-from utils import logger
 import boto3
-import datetime
-import os
+import json
 
 
-class Optimiser:
-    def __init__(self, fn: str):
+class Optimiser(PortfolioStrategy):
+    def __init__(self, cf: str):
         """
         Constructor initialises GAMS workspace and reads configuration
+        :param cf: config file path
         """
-
-        self.logger = logger.Logger(logger.LogLevel.normal, "Optimiser")
+        super().__init__("Optimiser")
 
         # Get the config
-        cf = "config.cf"
-        self.config = configparser.ConfigParser()
         self.config.read(cf)
         gams_path = self.config["optimiser"]["gams"]
         self.opt = self.config["optimiser"]
 
+        # Init GAMS
         self.ws = GamsWorkspace(system_directory=gams_path,
                                 debug=DebugLevel.KeepFiles,
                                 working_directory="./tmp/")
         self.db = self.ws.add_database()
-        self.df = pd.DataFrame()
-        self.data_date = datetime.date.today()
-        self.fn = fn
 
     def create_gdx(self):
         """
@@ -46,11 +40,6 @@ class Optimiser:
         :return:
         """
         self.logger.log("Preparing optimiser input")
-
-        self.df = pd.read_csv(self.fn, na_values="NoMD")
-
-        # Update data update date
-        self.data_date = datetime.date.fromtimestamp(os.path.getmtime(self.fn))
 
         # Eliminate all NA
         # df.loc[df['column_name'].isin(some_values)]
@@ -198,10 +187,11 @@ class Optimiser:
         :return:
         """
         self.logger.log("Adding positions to the data frame")
-        x = pd.Series(res["trades"]).reset_index()
-        x = pd.DataFrame(x)
+
+        x = pd.read_json(json.dumps(res["trades"]), orient="records")
         x.columns = ["Financial Instrument", "side", "q"]
         x = x.pivot(index="Financial Instrument", columns="side", values="q").fillna(0)
+
         self.df = self.df.join(x, on="Financial Instrument", rsuffix="_x")
         self.df = self.df.fillna(0)
 
@@ -216,13 +206,25 @@ class Optimiser:
         :param dt: List of data returned by the optimiser
         :return:
         """
+        d = {"dtg": self.data_date.strftime("%y%m%d%H%M%S"),
+             "data": self.df,
+             "greeks": dt["total_greeks"],
+             "live": False,
+             "margin": dt["total_margin"],
+             "opt": self.opt,
+             "pos": dt["total_pos"],
+             "trades": dt["trades"],
+             "monGreeks": dt["monthly_greeks"]}
+
         self.logger.log("Exporting optimisation results to Dynamo DB")
 
         db = boto3.resource('dynamodb', region_name='us-east-1',
                             endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
         table = db.Table(tbl)
-        # table.put_item()
+        # TODO: This Dynamo upload here needs to be tested!
+        # response = table.put_item(Item=d)
 
+        #self.logger.log(response)
         self.logger.error("Import from " + tbl + " not implemented")
 
     def export_trades_csv(self, fn: str):
@@ -241,8 +243,8 @@ class Optimiser:
         df_new = pd.DataFrame(np.where(df_tmp["Trade"] > 0, "BUY", "SELL"))
         df_new.columns = ["Action"]
         df_new["Quantity"] = np.abs(df_tmp["Trade"].astype(int)).tolist()
-        df_new["Symbol"] = self.config["optimiser"]["symbol"]
-        df_new["SecType"] = self.config["optimiser"]["sectype"]
+        df_new["Symbol"] = self.opt["symbol"]
+        df_new["SecType"] = self.opt["sectype"]
 
         d = pd.TimedeltaIndex(data=df_tmp["Days to Last Trading Day"], unit="D")
         df_new["LastTradingDayOrContractMonth"] = pd.to_datetime(self.data_date) + d
@@ -250,15 +252,15 @@ class Optimiser:
 
         df_new["Strike"] = df_tmp["Strike"].tolist()
         df_new["Right"] = df_tmp["Side"].str.upper().tolist()
-        df_new["Exchange"] = self.config["optimiser"]["exchange"]
-        df_new["Currency"] = self.config["optimiser"]["currency"]
+        df_new["Exchange"] = self.opt["exchange"]
+        df_new["Currency"] = self.opt["currency"]
         df_new["TimeInForce"] = "DAY"
         df_new["OrderType"] = "LMT"
         df_new["LmtPrice"] = df_tmp["Mid"].tolist()
         df_new["BasketTag"] = "Basket"
-        df_new["Account"] = self.config["optimiser"]["account"]
+        df_new["Account"] = self.opt["account"]
         df_new["OrderRef"] = "Basket"
-        df_new["Multiplier"] = self.config["optimiser"]["mult"]
+        df_new["Multiplier"] = self.opt["mult"]
 
         df_new.to_csv(fn, index=False)
         remove_last_csv_newline(fn)
@@ -283,9 +285,10 @@ def main():
     Main optimisation code
     :return:
     """
-    o = Optimiser("data/181105 options.csv")
+    o = Optimiser("config.cf")
+    o.get_mkt_data_csv("data/181105 options.csv")
     o.create_gdx()
-    # o.run_gams()
+    o.run_gams()
     d = o.import_gdx()
     o.add_trades_to_df(d)
     o.export_results_dynamo("optResults", d)

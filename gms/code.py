@@ -14,7 +14,11 @@ def get_code(tbl: str, version=None):
     :param version: Code version, if None, then get the latest
     :return:
     """
-    pass
+    db = boto3.resource('dynamodb', region_name='us-east-1',
+                        endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
+    table = db.Table(tbl)
+    response = table.scan()
+    return response
 
 
 def upload_code(tbl: str, fn: str, version=None):
@@ -31,8 +35,13 @@ def upload_code(tbl: str, fn: str, version=None):
 
     print(data)
 
+    # TODO: If version is not given, find the latest version and increment by one
+    if version is None:
+        version = 1
+
     # Open the data table and insert item
     db = boto3.resource('dynamodb', region_name='us-east-1',
                         endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
     table = db.Table(tbl)
-    table.put_item({"data": data})
+    response = table.put_item(Item={"data": data, "version": version})
+    print(response)
