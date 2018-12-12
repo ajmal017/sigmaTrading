@@ -7,9 +7,11 @@ Date: 11. December 2018
 import os
 import pandas as pd
 import boto3
+from boto3.dynamodb.conditions import Key
 import datetime
 import configparser
 from utils import logger
+import json
 
 
 class PortfolioStrategy:
@@ -24,25 +26,29 @@ class PortfolioStrategy:
         self.data_date = 0
         self.config = configparser.ConfigParser()
 
-    # TODO: Market data from Dynamo DB  needs to be implemented
     def get_mkt_data_dynamo(self, dtg=None):
         """
         Downloads market data snapshot from DynamoDB table
         :param dtg: Timestamp, if equals none, return latest snapshot
         :return: pandas data frame
         """
+        self.logger.log("Reading market data from Dynamo DB")
+
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1',
                                   endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
         table = dynamodb.Table(self.config["data"]["mkt.table"])
 
         # If dtg is not given, get the latest snapshot, otherwise find the right dtg
         if dtg is None:
-            pass
-        else:
-            pass
+            response = table.scan(AttributesToGet=['dtg'])
+            d = response["Items"]
+            d = pd.DataFrame.from_dict(d)
+            dtg = max(d["dtg"])
 
-        response = table.scan()
-        return response
+        response = table.query(KeyConditionExpression=Key('dtg').eq(dtg))
+        response = response["Items"][0]
+        self.df = pd.DataFrame(json.loads(response["data"]), columns=response["columns"], index=response["index"])
+        self.data_date = datetime.datetime.strptime(dtg, "%y%m%d%H%M%S")
 
     def get_mkt_data_csv(self, fn: str):
         """
@@ -50,5 +56,6 @@ class PortfolioStrategy:
         :param fn: filename
         :return:
         """
-        self.df = pd.read_csv(fn, na_values="NoMD")
+        self.logger.log("Reading market data from CSV file " + fn)
+        self.df = pd.read_csv(fn, na_values="NoMD", index_col=0)
         self.data_date = datetime.datetime.fromtimestamp(os.path.getmtime(fn))

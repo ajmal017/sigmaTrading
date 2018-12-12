@@ -53,8 +53,9 @@ class Optimiser(PortfolioStrategy):
         # df['Position'] = np.where(df['Position'].isnull(), 0, df['Position'])
 
         # Add sides
+        self.df['Financial Instrument'] = self.df.index
         self.df['Financial Instrument'] = self.df['Financial Instrument'].astype(str)
-        self.df['Side'] = np.where(self.df['Financial Instrument'].str.contains("PUT"), "p", "c")
+        self.df['Side'] = np.where(self.df.index.str.contains("PUT"), "p", "c")
 
         self.df['Put'] = np.where(self.df['Side'] == "p", 1, 0)
         self.df['Call'] = np.where(self.df['Side'] == "c", 1, 0)
@@ -218,7 +219,7 @@ class Optimiser(PortfolioStrategy):
         dt["trades"].columns = ["s_names", "s_trade", "val"]
 
         d = {"dtg": self.data_date.strftime("%y%m%d%H%M%S"),
-             "data": self.df.to_json(orient="split"),
+             # "data": self.df.to_json(orient="split"),
              "greeks": dt["total_greeks"].to_json(orient="records"),
              "live": False,
              "margin": dt["total_margin"].to_json(orient="records"),
@@ -278,6 +279,7 @@ class Optimiser(PortfolioStrategy):
         remove_last_csv_newline(fn)
 
 
+# TODO: Move that under utilities
 def remove_last_csv_newline(fn: str):
     """
     Removes newline from the last row of CSV file
@@ -298,14 +300,17 @@ def main():
     :return:
     """
     o = Optimiser("config.cf")
-    o.get_mkt_data_csv("data/181211 options.csv")
+    o.get_mkt_data_dynamo()
+    #o.get_mkt_data_csv("data/181211 options.csv")
+    # TODO: Add automatically writing data to Dynamo here
     o.create_gdx()
     # o.run_gams()
     d = o.import_gdx()
     o.add_trades_to_df(d)
-    o.export_results_dynamo("optResults", d)
-    o.export_trades_csv("./data/basket.csv")
+    #o.export_results_dynamo("optResults", d)
+    #o.export_trades_csv("./data/basket.csv")
 
 
 if __name__ == "__main__":
+    # TODO: Add command line parameters
     main()
