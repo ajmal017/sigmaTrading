@@ -48,3 +48,18 @@ def write_dynamo(filename: str, tbl: str, inst: str):
     return response
 
 
+# TODO: Move that under utilities
+def remove_last_csv_newline(fn: str):
+    """
+    Removes newline from the last row of CSV file
+    :param fn: filename
+    :return:
+    """
+    with open(fn) as f:
+        lines = f.readlines()
+        last = len(lines) - 1
+        lines[last] = lines[last].replace('\r', '').replace('\n', '')
+    with open(fn, 'w') as wr:
+        wr.writelines(lines)
+
+

@@ -12,6 +12,7 @@ from quant import greeks, margins
 from gms import data
 import boto3
 import json
+import utils
 
 
 class Optimiser(PortfolioStrategy):
@@ -29,7 +30,7 @@ class Optimiser(PortfolioStrategy):
 
         # Init GAMS
         self.ws = GamsWorkspace(system_directory=gams_path,
-                                debug=DebugLevel.KeepFiles,
+                                debug=DebugLevel.ShowLog,
                                 working_directory="./tmp/")
         self.db = self.ws.add_database()
 
@@ -276,22 +277,7 @@ class Optimiser(PortfolioStrategy):
         df_new["Multiplier"] = self.opt["mult"]
 
         df_new.to_csv(fn, index=False)
-        remove_last_csv_newline(fn)
-
-
-# TODO: Move that under utilities
-def remove_last_csv_newline(fn: str):
-    """
-    Removes newline from the last row of CSV file
-    :param fn: filename
-    :return:
-    """
-    with open(fn) as f:
-        lines = f.readlines()
-        last = len(lines) - 1
-        lines[last] = lines[last].replace('\r', '').replace('\n', '')
-    with open(fn, 'w') as wr:
-        wr.writelines(lines)
+        utils.data.remove_last_csv_newline(fn)
 
 
 def main():
@@ -303,12 +289,13 @@ def main():
     o.get_mkt_data_dynamo()
     #o.get_mkt_data_csv("data/181211 options.csv")
     # TODO: Add automatically writing data to Dynamo here
+    #  in case of loading from csv file, that is.
     o.create_gdx()
-    # o.run_gams()
+    o.run_gams()
     d = o.import_gdx()
     o.add_trades_to_df(d)
     #o.export_results_dynamo("optResults", d)
-    #o.export_trades_csv("./data/basket.csv")
+    o.export_trades_csv("./data/basket.csv")
 
 
 if __name__ == "__main__":

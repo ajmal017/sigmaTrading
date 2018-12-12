@@ -19,4 +19,4 @@ def get_version_string():
 
 __version__ = get_version_string()
 
-__all__ = ["data", "logger", "xml"]
+__all__ = ["data", "logger"]

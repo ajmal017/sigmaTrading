@@ -1,10 +1,23 @@
 """
-XML exports for TWS
+Various necessary tools and helpers for TWS API
 
 Author: Peeter Meos
-Date: 6. December 2018
+Date: 12. December 2018
 """
 from xml.etree.ElementTree import Element, SubElement, ElementTree
+
+
+def lookup_contract_id(df, tbl: str):
+    """
+    Performs contract ID lookup from TWS
+    :param df: series, list of instruments
+    :param tbl: table containing instrument names
+    :return:
+    """
+    # First look for Dynamo DB if there is no match, then
+    # look TWS get the IDs
+    # then update the Dynamo table
+    return
 
 
 """
@@ -20,7 +33,6 @@ from xml.etree.ElementTree import Element, SubElement, ElementTree
 """
 
 
-# TODO: Write risk manager portfolio export.
 def export_basket_xml(data: list, fn: str):
     """
     Exports basket of trades in Risk Navigator XML format
@@ -33,6 +45,7 @@ def export_basket_xml(data: list, fn: str):
 
     p = SubElement(x, "Portfolio")
 
+    # TODO: Contract id lookup needs to be added here
     for i in data:
         pos = SubElement(p, "Position", {"conid": 123123,
                                          "avgPrice": 12312312321,
@@ -40,4 +53,3 @@ def export_basket_xml(data: list, fn: str):
         pos.text = 1.0
 
     ElementTree(x).write(fn, encoding="UTF-8")
-    return x

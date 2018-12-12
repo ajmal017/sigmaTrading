@@ -10,7 +10,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 import datetime
 import configparser
-from utils import logger
+from utils import logger, data
 import json
 
 
@@ -23,8 +23,30 @@ class PortfolioStrategy:
         self.logger = logger.Logger(logger.LogLevel.normal, name)
 
         self.df = pd.DataFrame()
-        self.data_date = 0
+        self.data_date = datetime.datetime.today()
         self.config = configparser.ConfigParser()
+        self.inst = ""
+
+    def save_mkt_data_dynamo(self):
+        """
+        Saves current strategy's market data snapshot to Dynamo
+        :return:
+        """
+        # File modification date
+        dtg = self.data_date.strftime("%y%m%d%H%M%S")
+
+        # Instrument
+        dct = self.df.to_dict(orient="split")
+        dct["dtg"] = dtg
+        dct["inst"] = self.inst
+        dct["data"] = json.dumps(dct["data"])
+
+        # DB Connectivity
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1',
+                                  endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
+        table = dynamodb.Table(self.config["data"]["mkt.table"])
+        response = table.put_item(Item=data)
+        return response
 
     def get_mkt_data_dynamo(self, dtg=None):
         """
