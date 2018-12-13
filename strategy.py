@@ -15,12 +15,15 @@ import json
 
 
 class PortfolioStrategy:
-    def __init__(self, name="PortfolioStrategy"):
+    def __init__(self,
+                 name="PortfolioStrategy",
+                 loglevel=logger.LogLevel.normal):
         """
         Dummy constructor for the data structure
         """
 
-        self.logger = logger.Logger(logger.LogLevel.normal, name)
+        self.loglevel = loglevel
+        self.logger = logger.Logger(self.loglevel, name)
 
         self.df = pd.DataFrame()
         self.data_date = datetime.datetime.today()
@@ -62,15 +65,18 @@ class PortfolioStrategy:
 
         # If dtg is not given, get the latest snapshot, otherwise find the right dtg
         if dtg is None:
-            response = table.scan(AttributesToGet=['dtg'])
-            d = response["Items"]
-            d = pd.DataFrame.from_dict(d)
+            response = table.scan(FilterExpression=Key('dtg').gt(0),
+                                  ProjectionExpression="#dtg",
+                                  ExpressionAttributeNames={"#dtg": "dtg"})
+
+            d = pd.DataFrame.from_dict(response["Items"])
             dtg = max(d["dtg"])
+            self.logger.log("Latest timestamp in market data table is " + str(dtg))
 
         response = table.query(KeyConditionExpression=Key('dtg').eq(dtg))
         response = response["Items"][0]
         self.df = pd.DataFrame(json.loads(response["data"]), columns=response["columns"], index=response["index"])
-        self.data_date = datetime.datetime.strptime(dtg, "%y%m%d%H%M%S")
+        self.data_date = datetime.datetime.strptime(str(dtg), "%y%m%d%H%M%S")
 
     def get_mkt_data_csv(self, fn: str):
         """

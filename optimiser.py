@@ -13,6 +13,7 @@ from gms import data
 import boto3
 import json
 import utils
+from utils import logger
 
 
 class Optimiser(PortfolioStrategy):
@@ -29,8 +30,15 @@ class Optimiser(PortfolioStrategy):
         self.opt = self.config["optimiser"]
 
         # Init GAMS
+        if self.loglevel == logger.LogLevel.normal:
+            gams_debug_level = DebugLevel.KeepFiles
+        elif self.loglevel == logger.LogLevel.verbose:
+            gams_debug_level = DebugLevel.ShowLog
+        else:
+            gams_debug_level = DebugLevel.Off
+
         self.ws = GamsWorkspace(system_directory=gams_path,
-                                debug=DebugLevel.ShowLog,
+                                debug=gams_debug_level,
                                 working_directory="./tmp/")
         self.db = self.ws.add_database()
 
@@ -290,12 +298,12 @@ def main():
     #o.get_mkt_data_csv("data/181211 options.csv")
     # TODO: Add automatically writing data to Dynamo here
     #  in case of loading from csv file, that is.
-    o.create_gdx()
-    o.run_gams()
-    d = o.import_gdx()
-    o.add_trades_to_df(d)
+    #o.create_gdx()
+    #o.run_gams()
+    #d = o.import_gdx()
+    #o.add_trades_to_df(d)
     #o.export_results_dynamo("optResults", d)
-    o.export_trades_csv("./data/basket.csv")
+    #o.export_trades_csv("./data/basket.csv")
 
 
 if __name__ == "__main__":

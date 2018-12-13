@@ -37,6 +37,7 @@ class MarginCalc(TwsWrapper, EClient):
         EClient.__init__(self, wrapper=self)
 
         self.chain = []
+        self.ul_chain = []
         self.nextId = -1
 
         self.strikes = np.array(range(0, 80)) / 2 + 40
@@ -83,7 +84,6 @@ class MarginCalc(TwsWrapper, EClient):
         sides = ["c", "p"]
         action = ["BUY", "SELL"]
         o = int(self.nextId)
-        o_ul = 1
         for m in self.months:
             for i in self.strikes:
                 for j in sides:
@@ -94,17 +94,27 @@ class MarginCalc(TwsWrapper, EClient):
                                            "action": k,
                                            "expiry": m})
                         o = o + 1
-            self.reqMktData(o_ul, self.ul, genericTickList="",
-                            snapshot=True, regulatorySnapshot=False,
-                            mktDataOptions=[])
+
+        # And same for futures
+        for m in self.months:
+            self.ul_chain.append({"id": o,
+                                  "expiry": m})
+            o = o + 1
 
     def req_margins(self):
         """
         Requests data
         :return:
         """
-        for i in self.chain:
+        # Request data for underlying
+        for i in self.ul_chain:
+            self.ul.lastTradeDateOrContractMonth = i["expiry"]
+            self.reqMktData(i["id"], self.ul, genericTickList="",
+                            snapshot=True, regulatorySnapshot=False,
+                            mktDataOptions=[])
 
+        # Request data for option chain
+        for i in self.chain:
             self.cont.right = i["side"].upper()
             self.cont.strike = i["strike"]
             self.cont.lastTradeDateOrContractMonth = i["expiry"]
@@ -140,23 +150,35 @@ class MarginCalc(TwsWrapper, EClient):
         """
         pass
 
-    def tickPrice(self, req_id: int, tick_type: TickType, price:float,
+    def tickPrice(self, req_id: int, tick_type: TickType, price: float,
                   attrib: TickAttrib):
         """
-
+        We need to update underlying price here
         :param req_id:
         :param tick_type:
         :param price:
         :param attrib:
         :return:
         """
-        pass
+        if req_id >= 5000:
+            # Future, update relevant option chain elements with ul_price
+            # We need to do that for last traded price, or bid/ask midpoint?
+            if tick_type == 1 or tick_type == 2:
+                for i in self.ul_chain:
+                    if i["id"] == req_id:
+                        if tick_type == 1:
+                            i["bid"] = price
+                        if tick_type == 2:
+                            i["ask"] = price
+        else:
+            # Options - dont need to do anything
+            pass
 
     def tickOptionComputation(self, req_id: int, tick_type: TickType,
                               implied_vol: float, delta: float, opt_price: float, pv_dividend:float,
                               gamma: float, vega: float, theta: float, und_price: float):
         """
-
+        We need to update option delta here for the chain elements
         :param req_id:
         :param tick_type:
         :param implied_vol:
@@ -169,7 +191,13 @@ class MarginCalc(TwsWrapper, EClient):
         :param und_price:
         :return:
         """
-        pass
+        if tick_type == 11 or tick_type == 12:
+            for i in self.chain:
+                if i["id"] == req_id:
+                    if tick_type == 11:
+                        i["delta_bid"] = delta
+                    if tick_type == 12:
+                        i["delta_ask"] = delta
 
     def openOrder(self, order_id: int, contract: Contract, order: Order,
                   order_state: OrderState):
@@ -199,6 +227,24 @@ class MarginCalc(TwsWrapper, EClient):
                 if "i_margin" not in i or "m_margin" not in i:
                     found = False
             time.sleep(0.5)
+
+    def summarise_chain(self):
+        """
+        Generates full option chain for export
+        :return:
+        """
+        # Calculate price midpoints
+        ul_price = []
+        for i in self.ul_chain:
+            ul_price.append((i["bid"] + i["ask"]) / 2)
+
+        # Update underlying prices and greeks
+        for i in self.chain:
+            i["delta"] = (i["delta_bid"] + i["delta_ask"]) / 2
+            i["ulPrice"] = ul_price[self.months.index(i["expiry"])]
+
+        # TODO: Days to expiry calculation
+        #  Both long and short margins in the same structure
 
     def export_dynamo(self, tbl="margin"):
         """
@@ -240,6 +286,7 @@ def main():
     tws.create_instruments()
     tws.req_margins()
     tws.wait_to_finish()
+    tws.summarise_chain()
     tws.export_dynamo()
     tws.disconnect()
 
