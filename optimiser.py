@@ -199,6 +199,27 @@ class Optimiser(PortfolioStrategy):
         # And we are done
         return d
 
+    def opt_summary(self, df: dict):
+        """
+        Outputs summary results of the optimisation run
+        :param df: dict with optimisation results
+        :return:
+        """
+        self.logger.log("OPTIMISATION RESULTS")
+        # Greeks
+        self.logger.log("--------Greeks--------")
+        self.logger.log("Greek\t\tNew\t\tOld")
+        for i, r in df["total_greeks"].iterrows():
+            self.logger.log(r["s_greeks"] + "\t" +
+                            str(r["new"]) + "\t\t" +
+                            str(r["old"]))
+        # Trades
+        self.logger.log("--------Trades--------")
+        for i, r in df["trades"].iterrows():
+            self.logger.log(r["Financial Instrument"] + "\t\t" +
+                            r["side"] + "\t" +
+                            str(r["q"]))
+
     def add_trades_to_df(self, res: dict):
         """
         Adds optimiser results to the market data snapshot data frame
@@ -294,16 +315,17 @@ def main():
     :return:
     """
     o = Optimiser("config.cf")
-    o.get_mkt_data_dynamo()
-    #o.get_mkt_data_csv("data/181211 options.csv")
+    # o.get_mkt_data_dynamo()
+    o.get_mkt_data_csv("/Users/peeterm/eclipse-workspace/volTrader/data/181213 options.csv")
     # TODO: Add automatically writing data to Dynamo here
     #  in case of loading from csv file, that is.
-    #o.create_gdx()
-    #o.run_gams()
-    #d = o.import_gdx()
-    #o.add_trades_to_df(d)
-    #o.export_results_dynamo("optResults", d)
-    #o.export_trades_csv("./data/basket.csv")
+    o.create_gdx()
+    o.run_gams()
+    d = o.import_gdx()
+    o.add_trades_to_df(d)
+    o.opt_summary(d)
+    # o.export_results_dynamo("optResults", d)
+    o.export_trades_csv("./data/basket.csv")
 
 
 if __name__ == "__main__":

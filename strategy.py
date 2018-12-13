@@ -65,9 +65,11 @@ class PortfolioStrategy:
 
         # If dtg is not given, get the latest snapshot, otherwise find the right dtg
         if dtg is None:
-            response = table.scan(FilterExpression=Key('dtg').gt(0),
-                                  ProjectionExpression="#dtg",
-                                  ExpressionAttributeNames={"#dtg": "dtg"})
+            #response = table.scan(FilterExpression=Key('dtg').gt(0),
+            #                      ProjectionExpression="#dtg",
+            #                      ExpressionAttributeNames={"#dtg": "dtg"})
+            response = table.scan(AttributesToGet=["dtg"])
+            print(response)
 
             d = pd.DataFrame.from_dict(response["Items"])
             dtg = max(d["dtg"])

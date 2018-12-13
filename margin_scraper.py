@@ -13,8 +13,10 @@ from ibapi.contract import Contract, ContractDetails
 from ibapi.wrapper import TickType, TickAttrib
 from ibapi.order_state import OrderState
 from threading import Thread
+import pandas as pd
 import numpy as np
 import time
+from datetime import datetime
 import boto3
 
 
@@ -82,18 +84,18 @@ class MarginCalc(TwsWrapper, EClient):
         """
 
         sides = ["c", "p"]
-        action = ["BUY", "SELL"]
         o = int(self.nextId)
         for m in self.months:
             for i in self.strikes:
                 for j in sides:
-                    for k in action:
-                        self.chain.append({"id": o,
-                                           "strike": i,
-                                           "side": j,
-                                           "action": k,
-                                           "expiry": m})
-                        o = o + 1
+                    self.chain.append({"id_long": o,
+                                       "id_short": o + 1,
+                                       "strike": i,
+                                       "side": j,
+                                       "expiry": m,
+                                       "delta_bid": 0,
+                                       "delta_ask": 0})
+                    o = o + 2
 
         # And same for futures
         for m in self.months:
@@ -121,15 +123,24 @@ class MarginCalc(TwsWrapper, EClient):
 
             order = Order()
             order.whatIf = True
-            order.orderId = i["id"]
             order.totalQuantity = 1
             order.orderType = "MKT"
-            order.action = i["action"]
 
-            self.placeOrder(i["id"], self.cont, order)
-            time.sleep(1/20)
-            # TODO: Possible duplicate request IDs?
-            self.reqMktData(i["id"], self.cont, genericTickList="",
+            order.orderId = i["id_long"]
+            order.action = "BUY"
+            self.placeOrder(i["id_long"], self.cont, order)
+            time.sleep(1/60)
+            self.reqMktData(i["id_long"], self.cont, genericTickList="",
+                            snapshot=True, regulatorySnapshot=False,
+                            mktDataOptions=[])
+            time.sleep(1/60)
+            self.reqContractDetails(i["id_long"], self.cont)
+
+            order.orderId = i["id_short"]
+            order.action = "SELL"
+            self.placeOrder(i["id_short"], self.cont, order)
+            time.sleep(1/60)
+            self.reqMktData(i["id_short"], self.cont, genericTickList="",
                             snapshot=True, regulatorySnapshot=False,
                             mktDataOptions=[])
 
@@ -148,7 +159,9 @@ class MarginCalc(TwsWrapper, EClient):
         :param contract_details:
         :return:
         """
-        pass
+        for i in self.chain:
+            if req_id == i["id_long"]:
+                i["lastTradingDay"] = contract_details.realExpirationDate
 
     def tickPrice(self, req_id: int, tick_type: TickType, price: float,
                   attrib: TickAttrib):
@@ -160,7 +173,7 @@ class MarginCalc(TwsWrapper, EClient):
         :param attrib:
         :return:
         """
-        if req_id >= 5000:
+        if req_id >= 0:
             # Future, update relevant option chain elements with ul_price
             # We need to do that for last traded price, or bid/ask midpoint?
             if tick_type == 1 or tick_type == 2:
@@ -175,7 +188,7 @@ class MarginCalc(TwsWrapper, EClient):
             pass
 
     def tickOptionComputation(self, req_id: int, tick_type: TickType,
-                              implied_vol: float, delta: float, opt_price: float, pv_dividend:float,
+                              implied_vol: float, delta: float, opt_price: float, pv_dividend: float,
                               gamma: float, vega: float, theta: float, und_price: float):
         """
         We need to update option delta here for the chain elements
@@ -193,7 +206,7 @@ class MarginCalc(TwsWrapper, EClient):
         """
         if tick_type == 11 or tick_type == 12:
             for i in self.chain:
-                if i["id"] == req_id:
+                if i["id_long"] == req_id or i["id_short"] == req_id:
                     if tick_type == 11:
                         i["delta_bid"] = delta
                     if tick_type == 12:
@@ -210,10 +223,12 @@ class MarginCalc(TwsWrapper, EClient):
         :return:
         """
         for i in self.chain:
-            if i["id"] == order_id:
-                print(str(i["strike"]) + " " + i["side"])
-                i["i_margin"] = order_state.initMarginChange
-                i["m_margin"] = order_state.maintMarginChange
+            if i["id_short"] == order_id:
+                print(i["expiry"] + " " + str(i["strike"]) + " " + i["side"])
+                i["marginShort"] = order_state.initMarginChange
+            if i["id_long"] == order_id:
+                print(i["expiry"] + " " + str(i["strike"]) + " " + i["side"])
+                i["marginLong"] = order_state.initMarginChange
 
     def wait_to_finish(self):
         """
@@ -224,7 +239,7 @@ class MarginCalc(TwsWrapper, EClient):
         while not found:
             found = True
             for i in self.chain:
-                if "i_margin" not in i or "m_margin" not in i:
+                if "marginLong" not in i or "marginShort" not in i:
                     found = False
             time.sleep(0.5)
 
@@ -240,11 +255,16 @@ class MarginCalc(TwsWrapper, EClient):
 
         # Update underlying prices and greeks
         for i in self.chain:
-            i["delta"] = (i["delta_bid"] + i["delta_ask"]) / 2
-            i["ulPrice"] = ul_price[self.months.index(i["expiry"])]
-
-        # TODO: Days to expiry calculation
-        #  Both long and short margins in the same structure
+            if "delta_ask" in i.keys() and "delta_bid" in i.keys():
+                if not i["delta_bid"] is None and not i["delta_ask"] is None:
+                    i["delta"] = (i["delta_bid"] + i["delta_ask"]) / 2
+                elif i["delta_bid"] is None:
+                    i["delta"] = i["delta_ask"]
+                elif i["delta_ask"] is None:
+                    i["delta"] = i["delta_bid"]
+                else:
+                    i["delta"] = 0
+                i["ulPrice"] = ul_price[self.months.index(i["expiry"])]
 
     def export_dynamo(self, tbl="margin"):
         """
@@ -269,10 +289,17 @@ class MarginCalc(TwsWrapper, EClient):
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1',
                                   endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
         table = dynamodb.Table(tbl)
-        # TODO: This needs to be in proper format
-        # {"inst": self.cont.symbol, "date": dtg, "data":}
-        table.put_item()
-        print(self.chain)
+
+        dtg = datetime.today().strftime("%Y%m%d")
+
+        # Dict to data frame for convenience
+        df = pd.DataFrame(self.chain)
+        df["days"] = pd.to_datetime(df["lastTradingDay"], format="%Y%m%d", errors="ignore")
+        df["days"] = df["days"].sub(datetime.today()).dt.days
+        print(df)
+
+        d = {"inst": self.cont.symbol, "date": dtg, "data": df.to_json(orient="records")}
+        table.put_item(Item=d)
 
 
 def main():
@@ -287,7 +314,7 @@ def main():
     tws.req_margins()
     tws.wait_to_finish()
     tws.summarise_chain()
-    tws.export_dynamo()
+    # tws.export_dynamo()
     tws.disconnect()
 
 
