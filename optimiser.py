@@ -14,6 +14,7 @@ import boto3
 import json
 import utils
 from utils import logger
+from tws import tools
 
 
 class Optimiser(PortfolioStrategy):
@@ -72,8 +73,13 @@ class Optimiser(PortfolioStrategy):
         self.df['long'] = np.where(self.df['Position'] > 0, self.df['Position'], 0)
         self.df['short'] = np.where(self.df['Position'] < 0, -self.df['Position'], 0)
 
-        # Volatility in percent
+        # Time in years
         self.df['Days'] = self.df['Days to Last Trading Day'] / 365
+
+        # This is necessary for expiry days, so the greeks are at least somewhat finite
+        self.df['Days'] = np.where(self.df['Days'] == 0, 0.00001, self.df['Days'])
+
+        # Volatility in percent
         self.df = self.df[self.df['Implied Vol. %'] != "N/A"]
         self.df['Vol'] = self.df['Implied Vol. %'].str.replace('%', '')
         self.df['Vol'] = self.df['Vol'].astype(float) / 100
@@ -316,18 +322,21 @@ def main():
     """
     o = Optimiser("config.cf")
     # o.get_mkt_data_dynamo()
-    o.get_mkt_data_csv("/Users/peeterm/eclipse-workspace/volTrader/data/181213 options.csv")
+    o.get_mkt_data_csv("/Users/peeterm/eclipse-workspace/volTrader/data/181214 options.csv")
     # TODO: Add automatically writing data to Dynamo here
     #  in case of loading from csv file, that is.
     o.create_gdx()
-    o.run_gams()
+    #o.run_gams()
     d = o.import_gdx()
     o.add_trades_to_df(d)
     o.opt_summary(d)
     # o.export_results_dynamo("optResults", d)
-    o.export_trades_csv("./data/basket.csv")
+    #o.export_trades_csv("./data/basket.csv")
+    tools.export_portfolio_xml(o.df, "./data/basket.xml")
 
 
 if __name__ == "__main__":
     # TODO: Add command line parameters
+    #  For either reading from CSV file or from Dynamo or from SQLITE
+    #  Also help
     main()
