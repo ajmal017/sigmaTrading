@@ -6,6 +6,7 @@ Date: 12. December 2018
 """
 from xml.etree.ElementTree import Element, SubElement, ElementTree
 import boto3
+from boto3.dynamodb.conditions import Key
 import pandas as pd
 
 
@@ -20,18 +21,16 @@ def lookup_contract_id(df, tbl: str):
                         endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
     table = db.Table(tbl)
 
-    # First look for Dynamo DB if there is no match, then
-    # look TWS get the IDs
-    # then update the Dynamo table
-
     # Loop through the table
-    for i, r in df.iterrows():
-        response = table.query()
-        if len(response["Items"]) == 0:
-            # Then request conid from the TWS
-            pass
 
-    df["conid"] = "1234"
+    df["conid"] = ""
+    for i, r in df.iterrows():
+        response = table.query(KeyConditionExpression=Key('instString').eq(r["Financial Instrument"]))
+        if len(response["Items"]) == 0:
+            r["conid"] = "0"
+        else:
+            df.loc[i, "conid"] = response["Items"][0]["conid"]
+
     return df
 
 
@@ -57,8 +56,7 @@ def export_portfolio_xml(data: pd.DataFrame, fn: str):
     """
 
     tmp = data[data["Trade"] != 0].copy()
-
-    tmp = lookup_contract_id(tmp, "conid")
+    tmp = lookup_contract_id(tmp, "instruments")
 
     x = Element("CustAcct")
     x.set("version", "1.0")

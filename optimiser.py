@@ -15,6 +15,8 @@ import json
 import utils
 from utils import logger
 from tws import tools
+import sys
+import argparse
 
 
 class Optimiser(PortfolioStrategy):
@@ -78,6 +80,8 @@ class Optimiser(PortfolioStrategy):
 
         # This is necessary for expiry days, so the greeks are at least somewhat finite
         self.df['Days'] = np.where(self.df['Days'] == 0, 0.00001, self.df['Days'])
+        # TODO: Create field for contract month
+        self.df["Contract Month"] = "201901"
 
         # Volatility in percent
         self.df = self.df[self.df['Implied Vol. %'] != "N/A"]
@@ -183,27 +187,27 @@ class Optimiser(PortfolioStrategy):
         db_out = self.ws.add_database_from_gdx(gdx_file_name=fn, database_name="results")
 
         # Initialise output dict, enumerate the results and read them from GDX
-        d = {}
+        x = {}
         t = ["trades", "pos_greeks", "total_greeks", "total_pos", "total_margin", "monthly_greeks"]
         for i in t:
-            d[i] = data.read_gdx_param(db_out, i)
+            x[i] = data.read_gdx_param(db_out, i)
 
-        d["total_greeks"] = d["total_greeks"].pivot(index="s_greeks", columns="s_age", values="val")
-        d["total_greeks"].reset_index(level=0, inplace=True)
+        x["total_greeks"] = x["total_greeks"].pivot(index="s_greeks", columns="s_age", values="val")
+        x["total_greeks"].reset_index(level=0, inplace=True)
 
         # Dual indexes are a bitch, is there a better way?
-        d["monthly_greeks"] = d["monthly_greeks"].set_index(["s_greeks", "s_month", "s_age"]).unstack(level=-1)
-        d["monthly_greeks"].reset_index(level=1, inplace=True)
-        d["monthly_greeks"].columns = ["s_month", "new", "old"]
-        d["monthly_greeks"]["s_greeks"] = d["monthly_greeks"].index
+        x["monthly_greeks"] = x["monthly_greeks"].set_index(["s_greeks", "s_month", "s_age"]).unstack(level=-1)
+        x["monthly_greeks"].reset_index(level=1, inplace=True)
+        x["monthly_greeks"].columns = ["s_month", "new", "old"]
+        x["monthly_greeks"]["s_greeks"] = x["monthly_greeks"].index
 
         # After parameters, add variables
-        d["x"] = data.read_gdx_var(db_out, "x")
-        d["z"] = data.read_gdx_var(db_out, "z")
-        self.logger.log("Objective function value " + str(next(iter(d["z"].values()))))
+        x["x"] = data.read_gdx_var(db_out, "x")
+        x["z"] = data.read_gdx_var(db_out, "z")
+        self.logger.log("Objective function value " + str(next(iter(x["z"].values()))))
 
         # And we are done
-        return d
+        return x
 
     def opt_summary(self, df: dict):
         """
@@ -254,7 +258,7 @@ class Optimiser(PortfolioStrategy):
         """
         dt["trades"].columns = ["s_names", "s_trade", "val"]
 
-        d = {"dtg": self.data_date.strftime("%y%m%d%H%M%S"),
+        x = {"dtg": self.data_date.strftime("%y%m%d%H%M%S"),
              # "data": self.df.to_json(orient="split"),
              "greeks": dt["total_greeks"].to_json(orient="records"),
              "live": False,
@@ -272,7 +276,7 @@ class Optimiser(PortfolioStrategy):
         # TODO: This Dynamo upload here needs to be tested!
         #  Position data is somehow weird
         #  Data frame headers for data are different in R and Python!
-        response = table.put_item(Item=d)
+        response = table.put_item(Item=x)
 
         self.logger.log(str(response))
 
@@ -295,8 +299,8 @@ class Optimiser(PortfolioStrategy):
         df_new["Symbol"] = self.opt["symbol"]
         df_new["SecType"] = self.opt["sectype"]
 
-        d = pd.TimedeltaIndex(data=df_tmp["Days to Last Trading Day"], unit="D")
-        df_new["LastTradingDayOrContractMonth"] = pd.to_datetime(self.data_date) + d
+        d_tmp = pd.TimedeltaIndex(data=df_tmp["Days to Last Trading Day"], unit="D")
+        df_new["LastTradingDayOrContractMonth"] = pd.to_datetime(self.data_date) + d_tmp
         df_new["LastTradingDayOrContractMonth"] = df_new["LastTradingDayOrContractMonth"].dt.strftime("%Y%m%d")
 
         df_new["Strike"] = df_tmp["Strike"].tolist()
@@ -315,28 +319,44 @@ class Optimiser(PortfolioStrategy):
         utils.data.remove_last_csv_newline(fn)
 
 
-def main():
-    """
-    Main optimisation code
-    :return:
-    """
-    o = Optimiser("config.cf")
-    # o.get_mkt_data_dynamo()
-    o.get_mkt_data_csv("/Users/peeterm/eclipse-workspace/volTrader/data/181214 options.csv")
-    # TODO: Add automatically writing data to Dynamo here
-    #  in case of loading from csv file, that is.
-    o.create_gdx()
-    #o.run_gams()
-    d = o.import_gdx()
-    o.add_trades_to_df(d)
-    o.opt_summary(d)
-    # o.export_results_dynamo("optResults", d)
-    #o.export_trades_csv("./data/basket.csv")
-    tools.export_portfolio_xml(o.df, "./data/basket.xml")
+def print_help():
+    print("Help not implemented")
 
 
 if __name__ == "__main__":
-    # TODO: Add command line parameters
-    #  For either reading from CSV file or from Dynamo or from SQLITE
-    #  Also help
-    main()
+    # Process command line options
+    parser = argparse.ArgumentParser(description="Portfolio optimiser")
+    parser.add_argument("-c", action="store", help="Configuration file")
+    parser.add_argument("-i", action="store", help="Path to input data CSV file")
+    parser.add_argument("--db", action="store_true", help="Export optimisation results to Dynamo DB")
+    parser.add_argument("--xml", action="store_true", help="Export basket as TWS compatible XML")
+    parser.add_argument("--csv", action="store_true", help="Export basket as TWS compatible CSV")
+
+    args = parser.parse_args()
+
+    if args.c is None:
+        conf_file = "config.cf"
+    else:
+        conf_file = args.c
+
+    # Now the main code
+    o = Optimiser(conf_file)
+
+    if args.i is None:
+        o.get_mkt_data_dynamo()
+    else:
+        o.get_mkt_data_csv("/Users/peeterm/eclipse-workspace/volTrader/data/181213 options.csv")
+
+    o.create_gdx()
+    o.run_gams()
+    d = o.import_gdx()
+    o.add_trades_to_df(d)
+    o.opt_summary(d)
+
+    # Outputs
+    if args.db:
+        o.export_results_dynamo("optResults", d)
+    if args.csv:
+        o.export_trades_csv("./data/basket.csv")
+    if args.xml:
+        tools.export_portfolio_xml(o.df, "./data/basket.port.xml")

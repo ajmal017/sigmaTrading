@@ -91,7 +91,6 @@ class TwsTool(TwsWrapper, TwsClient):
         Shot down the TWS connection
         :return:
         """
-        self.logger.log("Closing down TWS connection")
         super().disconnect()
 
     def get_contract_id(self, cont: Contract):
