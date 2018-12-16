@@ -22,12 +22,13 @@ def lookup_contract_id(df, tbl: str):
     table = db.Table(tbl)
 
     # Loop through the table
-
+    # TODO: Implement logging instead of printing
     df["conid"] = ""
     for i, r in df.iterrows():
         response = table.query(KeyConditionExpression=Key('instString').eq(r["Financial Instrument"]))
         if len(response["Items"]) == 0:
             r["conid"] = "0"
+            print("Contract ID not found, please run contract scraper!")
         else:
             df.loc[i, "conid"] = response["Items"][0]["conid"]
 
@@ -47,15 +48,20 @@ def lookup_contract_id(df, tbl: str):
 """
 
 
-def export_portfolio_xml(data: pd.DataFrame, fn: str):
+def export_portfolio_xml(data: pd.DataFrame, fn: str, trades=False):
     """
     Exports basket of trades in Risk Navigator XML format
     :param data: Basket data as data frame
     :param fn: Filename for XML output
+    :param trades: Export trades instead of full portfolio
     :return:
     """
 
-    tmp = data[data["Trade"] != 0].copy()
+    if trades:
+        tmp = data[data["Trade"] != 0].copy()
+    else:
+        tmp = data[data["NewPosition"] != 0].copy()
+
     tmp = lookup_contract_id(tmp, "instruments")
 
     x = Element("CustAcct")
@@ -63,7 +69,6 @@ def export_portfolio_xml(data: pd.DataFrame, fn: str):
 
     p = SubElement(x, "Portfolio")
 
-    # TODO: Contract id lookup needs to be added here
     for i, r in tmp.iterrows():
         pos = SubElement(p, "Position", {"conid": str(r["conid"]),
                                          "avgPrice": str(r["Avg Price"]),

@@ -6,26 +6,15 @@ into Dynamo. Ported from Java
 Author: Peeter Meos, Sigma Research OÜ
 Date: 11. December 2018
 """
-from ibapi.wrapper import EWrapper
-from ibapi.client import EClient
-from ibapi.order import Order
-from ibapi.contract import Contract, ContractDetails
+from ibapi.contract import Contract
 from ibapi.wrapper import TickType, TickAttrib
-from ibapi.order_state import OrderState
-from threading import Thread
+from tws.tws import TwsTool
 import numpy as np
 import time
 import boto3
 
 
-class TwsWrapper(EWrapper):
-    """
-    TWS Wrapper doesnt need any changes, leave it as it is
-    """
-    pass
-
-
-class Snapshot(TwsWrapper, EClient):
+class Snapshot(TwsTool):
     """
     Class implements option chain snapshot data request and retrieval logic from TWS
     """
@@ -33,16 +22,11 @@ class Snapshot(TwsWrapper, EClient):
         """
         Standard constructor for the class
         """
-        TwsWrapper.__init__(self)
-        EClient.__init__(self, wrapper=self)
-
-        # TODO: Add logging, or perhaps create a generic trader class with logging already
-        #  included
+        super().__init__(name="Snapshot Scraper")
 
         self.chain = []
-        self.nextId = -1
 
-        self.strikes = np.array(range(0, 80)) / 2 + 40
+        self.strikes = np.array(range(0, 120)) / 2 + 40
         # TODO: This needs to be automatic
         self.months = ["201901", "201902", "201903", "201904", "201905", "201906"]
 
@@ -53,30 +37,6 @@ class Snapshot(TwsWrapper, EClient):
         self.cont.secType = "FOP"
         self.cont.tradingClass = "LO"
 
-        self.ul = Contract()
-        self.ul.symbol = "CL"
-        self.ul.exchange = "NYMEX"
-        self.ul.currency = "USD"
-        self.ul.secType = "FUT"
-
-    def connect(self, host, port, con_id):
-        """
-        Connect to TWS override
-        :param host:
-        :param port:
-        :param con_id:
-        :return:
-        """
-        EClient.connect(self, host, port, con_id)
-
-        thread = Thread(target=self.run)
-        thread.start()
-        setattr(self, "_thread", thread)
-
-        # Wait until next id
-        while self.nextId == -1:
-            time.sleep(0.1)
-
     def create_instruments(self):
         """
         Creates instruments
@@ -86,7 +46,6 @@ class Snapshot(TwsWrapper, EClient):
         sides = ["c", "p"]
         action = ["BUY", "SELL"]
         o = int(self.nextId)
-        o_ul = 1
         for m in self.months:
             for i in self.strikes:
                 for j in sides:
@@ -97,9 +56,6 @@ class Snapshot(TwsWrapper, EClient):
                                            "action": k,
                                            "expiry": m})
                         o = o + 1
-            self.reqMktData(o_ul, self.ul, genericTickList="",
-                            snapshot=True, regulatorySnapshot=False,
-                            mktDataOptions=[])
 
     def req_margins(self):
         """
@@ -112,54 +68,36 @@ class Snapshot(TwsWrapper, EClient):
             self.cont.strike = i["strike"]
             self.cont.lastTradeDateOrContractMonth = i["expiry"]
 
-            order = Order()
-            order.whatIf = True
-            order.orderId = i["id"]
-            order.totalQuantity = 1
-            order.orderType = "MKT"
-            order.action = i["action"]
-
-            self.placeOrder(i["id"], self.cont, order)
-            time.sleep(1/20)
-            # TODO: Possible duplicate request IDs?
+            time.sleep(1/40)
             self.reqMktData(i["id"], self.cont, genericTickList="",
                             snapshot=True, regulatorySnapshot=False,
                             mktDataOptions=[])
 
-    def nextValidId(self, order_id: int):
-        """
-        Next order ID update
-        :param order_id:
-        :return:
-        """
-        self.nextId = int(order_id)
-
-    def contractDetails(self, req_id: int, contract_details: ContractDetails):
-        """
-        Receives contract details for the instrument
-        :param req_id:
-        :param contract_details:
-        :return:
-        """
-        pass
-
     def tickPrice(self, req_id: int, tick_type: TickType, price:float,
                   attrib: TickAttrib):
         """
-
+        Market tick data override for snapshot market data retrieval
         :param req_id:
         :param tick_type:
         :param price:
         :param attrib:
         :return:
         """
-        pass
+        for i in self.chain:
+            if i["id"] == req_id:
+                # TODO: Check if the tick type values are correct
+                if tick_type == 1:
+                    i["Bid"] = price
+                elif tick_type == 2:
+                    i["Ask"] = price
+                elif tick_type == 5:
+                    i["Last"] = price
 
     def tickOptionComputation(self, req_id: int, tick_type: TickType,
                               implied_vol: float, delta: float, opt_price: float, pv_dividend:float,
                               gamma: float, vega: float, theta: float, und_price: float):
         """
-
+        Option computation and greek data retrieval override for saving the snapshot data.
         :param req_id:
         :param tick_type:
         :param implied_vol:
@@ -172,39 +110,34 @@ class Snapshot(TwsWrapper, EClient):
         :param und_price:
         :return:
         """
-        pass
-
-    def openOrder(self, order_id: int, contract: Contract, order: Order,
-                  order_state: OrderState):
-        """
-        Open order rewrite to handle the margin information
-        :param order_id:
-        :param contract:
-        :param order:
-        :param order_state:
-        :return:
-        """
         for i in self.chain:
-            if i["id"] == order_id:
-                print(str(i["strike"]) + " " + i["side"])
-                # TODO: Round those to nearest integers
-                i["i_margin"] = order_state.initMarginChange
-                i["m_margin"] = order_state.maintMarginChange
+            if i["id"] == req_id:
+                # TODO: Check how TWS calculates the greeks, which price does it base them on?
+                # TODO: Check that the fields names are indeed correct and match with the
+                #  data frame
+                i["Delta"] = delta
+                i["Gamma"] = gamma
+                i["Theta"] = theta
+                i["Vega"] = vega
+                i["Vol"] = implied_vol
+                i["ul price"] = und_price
 
     def wait_to_finish(self):
         """
         Waits until all margin data has been received
         :return:
         """
+        self.logger("Waiting for all market data to arrive")
         found = False
         while not found:
             found = True
             for i in self.chain:
-                if "i_margin" not in i or "m_margin" not in i:
+                if "Delta" not in i:
                     found = False
             time.sleep(0.5)
+        self.logger("All data has been received, proceeding")
 
-    def export_dynamo(self, tbl="margin"):
+    def export_dynamo(self, tbl="mktData"):
         """
         Exports the margins to dynamoDB
         :param tbl: Dynamo DB table to write the margins to

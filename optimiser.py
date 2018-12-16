@@ -15,7 +15,6 @@ import json
 import utils
 from utils import logger
 from tws import tools
-import sys
 import argparse
 
 
@@ -322,10 +321,6 @@ class Optimiser(PortfolioStrategy):
         utils.data.remove_last_csv_newline(fn)
 
 
-def print_help():
-    print("Help not implemented")
-
-
 if __name__ == "__main__":
     # Process command line options
     parser = argparse.ArgumentParser(description="Portfolio optimiser")
@@ -356,6 +351,9 @@ if __name__ == "__main__":
     d = o.import_gdx()
     o.add_trades_to_df(d)
     o.opt_summary(d)
+
+    # TODO: Here we need to add detection of FUT positions from assigned options
+    #  These positions need to be closed and added to both CSV and XML exports
 
     # Outputs
     if args.db:
