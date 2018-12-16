@@ -111,6 +111,25 @@ class Optimiser(PortfolioStrategy):
         # Margins
         margins.add_margins(self.df, self.opt["s3storage"])
 
+        # Calculate asset prices for given percent up and down. Right now lets set it at 3
+        #  3% is rather common to be useful for risk management. Actually that level should be
+        #  calculated backwards from VaR or something.
+        price_up = self.df["Underlying Price"] * (1 - float(self.opt["risk.pct"]))
+        price_down = self.df["Underlying Price"] * (1 + float(self.opt["risk.pct"]))
+        self.df["Price Up"] = greeks.val(price_up, self.df["Strike"], 0.01, 0, self.df["d1"], self.df["d1"],
+                                         self.df["Days"], self.df["Side"]) -\
+                              greeks.val(self.df["Underlying Price"],
+                                         self.df["Strike"], 0.01, 0, self.df["d1"],
+                                         self.df["d2"], self.df["Days"], self.df["Side"])
+
+        self.df["Price Down"] = greeks.val(price_down, self.df["Strike"], 0, 0,
+                                           self.df["d1"], self.df["d2"], self.df["Days"],
+                                           self.df["Side"]) - \
+                                greeks.val(self.df["Underlying Price"],
+                                           self.df["Strike"], 0, 0, self.df["d2"],
+                                           self.df["d2"], self.df["Days"], self.df["Side"])
+
+        # ACTUAL GDX CREATION STARTS HERE
         # Create sets for data
         data.create_set(self.db, "s_greeks", "List of greeks",
                         ["delta", "gamma", "theta", "vega", "speed", "vanna", "zomma"])
@@ -139,6 +158,7 @@ class Optimiser(PortfolioStrategy):
         data.create_scalar(self.db, "v_min_days", "Minimum days to expiry allowed", self.opt["min.days"])
         data.create_scalar(self.db, "v_max_trades", "Maximum rebalancing trades allowed", self.opt["max.trades"])
         data.create_scalar(self.db, "v_max_pos_mon", "Maximum monthly open positions allowed", self.opt["max.pos.mon"])
+        data.create_scalar(self.db, "v_max_risk", "Maximum absolute up and down risk", self.opt["max.risk"])
 
         # Parameter now the multi-dimensional parameters
         data.create_parameter(self.db, "p_y", "Existing position data",
@@ -156,6 +176,9 @@ class Optimiser(PortfolioStrategy):
         data.create_parameter(self.db, "p_side", "Option side (put/call)",
                               [self.df["Financial Instrument"], ["o_put", "o_call"]], "full",
                               self.df[["Financial Instrument", "Put", "Call"]])
+        data.create_parameter(self.db, "p_risk", "Upside and downside risk",
+                              [self.df["Financial Instrument"], ["up", "down"]], "full",
+                              self.df[["Financial Instrument", "Price Up", "Price Down"]])
         data.create_parameter(self.db, "p_spread", "Bid ask spread", [self.df["Financial Instrument"]], "sparse",
                               self.df["Spread"])
         data.create_parameter(self.db, "p_days", "Days until expiry", [self.df["Financial Instrument"]], "sparse",
