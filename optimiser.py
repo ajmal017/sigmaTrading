@@ -5,6 +5,7 @@ Author: Peeter Meos, Sigma Research OÜ
 Date: 2. December 2018
 """
 from gams import *
+from datetime import datetime
 import pandas as pd
 import numpy as np
 from strategy import PortfolioStrategy
@@ -14,17 +15,18 @@ import boto3
 import json
 import utils
 from utils import logger
+from utils.logger import LogLevel
 from tws import tools
 import argparse
 
 
 class Optimiser(PortfolioStrategy):
-    def __init__(self, cf: str):
+    def __init__(self, cf: str, loglevel: LogLevel = LogLevel.normal):
         """
         Constructor initialises GAMS workspace and reads configuration
         :param cf: config file path
         """
-        super().__init__("Optimiser")
+        super().__init__("Optimiser", loglevel=loglevel)
 
         # Get the config
         self.config.read(cf)
@@ -79,8 +81,6 @@ class Optimiser(PortfolioStrategy):
 
         # This is necessary for expiry days, so the greeks are at least somewhat finite
         self.df['Days'] = np.where(self.df['Days'] == 0, 0.00001, self.df['Days'])
-        # TODO: Create field for contract month
-        self.df["Contract Month"] = "201901"
 
         # Volatility in percent
         self.df = self.df[self.df['Implied Vol. %'] != "N/A"]
@@ -88,6 +88,11 @@ class Optimiser(PortfolioStrategy):
         self.df['Vol'] = self.df['Vol'].astype(float) / 100
         # TODO For whatever reason the following row does not work
         # df = df[pd.notnull(df['Vol'])]
+
+        # Create field for contract month
+        self.df['Contract Month'] = \
+            [datetime.strptime(item, "%b'%y").strftime("%Y%m") for item in self.df['Financial Instrument'].
+                str.split(" ").map(lambda x: x[3])]
 
         # Strikes
         self.df['Strike'] = self.df['Financial Instrument'].str.split(" ").map(lambda x: x[4])
@@ -117,17 +122,19 @@ class Optimiser(PortfolioStrategy):
         price_up = self.df["Underlying Price"] * (1 - float(self.opt["risk.pct"]))
         price_down = self.df["Underlying Price"] * (1 + float(self.opt["risk.pct"]))
         self.df["Price Up"] = greeks.val(price_up, self.df["Strike"], 0.01, 0, self.df["d1"], self.df["d1"],
-                                         self.df["Days"], self.df["Side"]) -\
-                              greeks.val(self.df["Underlying Price"],
-                                         self.df["Strike"], 0.01, 0, self.df["d1"],
-                                         self.df["d2"], self.df["Days"], self.df["Side"])
+                                         self.df["Days"], self.df["Side"]) - greeks.val(self.df["Underlying Price"],
+                                                                                        self.df["Strike"], 0.01, 0,
+                                                                                        self.df["d1"],
+                                                                                        self.df["d2"],
+                                                                                        self.df["Days"],
+                                                                                        self.df["Side"])
 
         self.df["Price Down"] = greeks.val(price_down, self.df["Strike"], 0, 0,
                                            self.df["d1"], self.df["d2"], self.df["Days"],
-                                           self.df["Side"]) - \
-                                greeks.val(self.df["Underlying Price"],
-                                           self.df["Strike"], 0, 0, self.df["d2"],
-                                           self.df["d2"], self.df["Days"], self.df["Side"])
+                                           self.df["Side"]) - greeks.val(self.df["Underlying Price"],
+                                                                         self.df["Strike"], 0, 0, self.df["d2"],
+                                                                         self.df["d2"], self.df["Days"],
+                                                                         self.df["Side"])
 
         # ACTUAL GDX CREATION STARTS HERE
         # Create sets for data
@@ -192,8 +199,9 @@ class Optimiser(PortfolioStrategy):
         :return:
         """
         self.logger.log("Running GAMS job")
+        # TODO: Implement GAMS code retrieval from the DB and then
+        #   implement adding job from a string
         model = self.ws.add_job_from_file("spo.gms")
-        # opt = self.ws.add_options()
         model.run(databases=self.db)
 
     def import_gdx(self, fn=None):
@@ -324,17 +332,15 @@ class Optimiser(PortfolioStrategy):
         df_new["Symbol"] = self.opt["symbol"]
         df_new["SecType"] = self.opt["sectype"]
 
-        d_tmp = pd.TimedeltaIndex(data=df_tmp["Days to Last Trading Day"], unit="D")
-        df_new["LastTradingDayOrContractMonth"] = pd.to_datetime(self.data_date) + d_tmp
-        df_new["LastTradingDayOrContractMonth"] = df_new["LastTradingDayOrContractMonth"].dt.strftime("%Y%m%d")
+        df_new["LastTradingDayOrContractMonth"] = df_tmp["Contract Month"].tolist()
 
-        df_new["Strike"] = df_tmp["Strike"].tolist()
+        df_new["Strike"] = ["{:g}".format(item) for item in df_tmp["Strike"].tolist()]
         df_new["Right"] = df_tmp["Side"].str.upper().tolist()
         df_new["Exchange"] = self.opt["exchange"]
         df_new["Currency"] = self.opt["currency"]
         df_new["TimeInForce"] = "DAY"
         df_new["OrderType"] = "LMT"
-        df_new["LmtPrice"] = df_tmp["Mid"].tolist()
+        df_new["LmtPrice"] = ["{0:.2f}".format(item) for item in df_tmp["Mid"].tolist()]
         df_new["BasketTag"] = "Basket"
         df_new["Account"] = self.opt["account"]
         df_new["OrderRef"] = "Basket"
@@ -349,9 +355,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Portfolio optimiser")
     parser.add_argument("-c", action="store", help="Configuration file")
     parser.add_argument("-i", action="store", help="Path to input data CSV file")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode. Log only errors.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Turn on verbose logging")
     parser.add_argument("--db", action="store_true", help="Export optimisation results to Dynamo DB")
-    parser.add_argument("--xml", action="store_true", help="Export basket as TWS compatible XML")
-    parser.add_argument("--csv", action="store_true", help="Export basket as TWS compatible CSV")
+    parser.add_argument("--xml", action="store", help="Export basket as TWS compatible XML")
+    parser.add_argument("--csv", action="store", help="Export basket as TWS compatible CSV")
     parser.add_argument("--dtg", action="store", help="DTG for Dynamo DB market snapshot retrieval.")
 
     args = parser.parse_args()
@@ -361,8 +369,14 @@ if __name__ == "__main__":
     else:
         conf_file = args.c
 
+    log = LogLevel.normal
+    if args.quiet:
+        log = LogLevel.error
+    if args.verbose:
+        log = LogLevel.verbose
+
     # Now the main code
-    o = Optimiser(conf_file)
+    o = Optimiser(conf_file, loglevel=log)
 
     if args.i is None:
         o.get_mkt_data_dynamo(dtg=args.dtg)

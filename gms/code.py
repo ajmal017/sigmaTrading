@@ -72,9 +72,9 @@ def upload_code(tbl: str, fn: str, opt: str, version=None):
             res = res + response["Items"]
 
         dt = pd.DataFrame.from_dict(res)
-        log.log("Latest version in DB is " + str(version))
         version = max(dt["version"]) + 1
+        log.log("Latest version in DB is " + str(version))
 
     log.log("Uploading GAMS formulation as version " + str(version))
     response = table.put_item(Item={"code": code, "opts": opts, "version": str(version)})
-    log.log(response)
+    log.log(str(response))

@@ -8,6 +8,7 @@ from xml.etree.ElementTree import Element, SubElement, ElementTree
 import boto3
 from boto3.dynamodb.conditions import Key
 import pandas as pd
+from utils.logger import LogLevel, Logger
 
 
 def lookup_contract_id(df, tbl: str):
@@ -48,18 +49,23 @@ def lookup_contract_id(df, tbl: str):
 """
 
 
-def export_portfolio_xml(data: pd.DataFrame, fn: str, trades=False):
+def export_portfolio_xml(data: pd.DataFrame, fn: str, trades=False, loglevel: LogLevel = LogLevel.normal):
     """
     Exports basket of trades in Risk Navigator XML format
     :param data: Basket data as data frame
     :param fn: Filename for XML output
     :param trades: Export trades instead of full portfolio
+    :param loglevel: Loglevel for the export
     :return:
     """
 
+    log = Logger(loglevel, "XML Export")
+
     if trades:
+        log.log("Exporting trades")
         tmp = data[data["Trade"] != 0].copy()
     else:
+        log.log("Exporting new portfolio position")
         tmp = data[data["NewPosition"] != 0].copy()
 
     tmp = lookup_contract_id(tmp, "instruments")
@@ -74,6 +80,7 @@ def export_portfolio_xml(data: pd.DataFrame, fn: str, trades=False):
                                          "avgPrice": str(r["Avg Price"]),
                                          "label": str(r["Financial Instrument"])
                                          })
-        pos.text = str(r["Trade"])
+        pos.text = str(r["Trade"]) if trades else str(r["NewPosition"])
 
     ElementTree(x).write(fn, encoding="UTF-8", xml_declaration=True)
+    log.log("XML export finished")
