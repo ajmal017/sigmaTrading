@@ -249,7 +249,7 @@ class Optimiser(PortfolioStrategy):
         self.df["Trade"] = self.df["buy"] - self.df["sell"]
         self.df["NewPosition"] = self.df["Position"] + self.df["Trade"]
 
-    def export_results_dynamo(self, tbl: str, dt: dict):
+    def export_results_dynamo(self, dt: dict, tbl: str = None):
         """
         Saves optimisation results to DynamoDB
         :param tbl: Dynamo table that receives the opt. result data
@@ -272,6 +272,9 @@ class Optimiser(PortfolioStrategy):
 
         db = boto3.resource('dynamodb', region_name='us-east-1',
                             endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
+        if tbl is None:
+            tbl = self.opt["results.table"]
+
         table = db.Table(tbl)
         # TODO: This Dynamo upload here needs to be tested!
         #  Position data is somehow weird
@@ -331,6 +334,7 @@ if __name__ == "__main__":
     parser.add_argument("--db", action="store_true", help="Export optimisation results to Dynamo DB")
     parser.add_argument("--xml", action="store_true", help="Export basket as TWS compatible XML")
     parser.add_argument("--csv", action="store_true", help="Export basket as TWS compatible CSV")
+    parser.add_argument("--dtg", action="store", help="DTG for Dynamo DB market snapshot retrieval.")
 
     args = parser.parse_args()
 
@@ -343,9 +347,9 @@ if __name__ == "__main__":
     o = Optimiser(conf_file)
 
     if args.i is None:
-        o.get_mkt_data_dynamo()
+        o.get_mkt_data_dynamo(dtg=args.dtg)
     else:
-        o.get_mkt_data_csv("/Users/peeterm/eclipse-workspace/volTrader/data/181213 options.csv")
+        o.get_mkt_data_csv(args.i)
 
     o.create_gdx()
     o.run_gams()
@@ -355,8 +359,8 @@ if __name__ == "__main__":
 
     # Outputs
     if args.db:
-        o.export_results_dynamo("optResults", d)
+        o.export_results_dynamo(d)
     if args.csv:
-        o.export_trades_csv("./data/basket.csv")
+        o.export_trades_csv(args.csv)
     if args.xml:
-        tools.export_portfolio_xml(o.df, "./data/basket.port.xml")
+        tools.export_portfolio_xml(o.df, args.xml)
