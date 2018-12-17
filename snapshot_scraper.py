@@ -13,6 +13,24 @@ import numpy as np
 import time
 import boto3
 
+"""
+The necessary columns are:
+Financial Instrument            CL FOP (LO) Feb'19 40 CALL @NYMEX
+Underlying Price                51.54
+Bid                             11.61
+Mid                             11.649999999999999
+Ask                             11.69
+Spread                          0.08
+Position
+Avg Price
+Implied Vol. %                  50.8%
+Delta                           0.964931
+Gamma                           0.010373
+Vega                            0.012236
+Theta                           -0.008877
+Days to Last Trading Day        30.0
+"""
+
 
 class Snapshot(TwsTool):
     """

@@ -14,8 +14,9 @@ import sys
 if __name__ == "__main__":
     # Process command line arguments
     parser = argparse.ArgumentParser(description="Data uploader to Dynamo DB")
-    parser.add_argument("-c", action="store", help="Upload GAMS code")
-    parser.add_argument("-d", action="store", help="Upload market data CSV")
+    parser.add_argument("-c", action="store", help="Upload GAMS code from given file")
+    parser.add_argument("-d", action="store", help="Upload market data CSV from given file")
+    parser.add_argument("--version", action="store", help="Version number for GAMS code")
 
     args = parser.parse_args()
 
@@ -25,7 +26,10 @@ if __name__ == "__main__":
 
     if args.c is not None:
         # Do code upload
-        code.upload_code("gamsCode", args.c)
+        if args.version is not None:
+            code.upload_code("gamsCode", args.c, args.version)
+        else:
+            code.upload_code("gamsCode", args.c)
 
     if args.d is not None:
         # Do market data upload

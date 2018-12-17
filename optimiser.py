@@ -120,9 +120,9 @@ class Optimiser(PortfolioStrategy):
         # Calculate asset prices for given percent up and down. Right now lets set it at 3
         #  3% is rather common to be useful for risk management. Actually that level should be
         #  calculated backwards from VaR or something.
-        price_up = self.df["Underlying Price"] * (1 - float(self.opt["risk.pct"]))
-        price_down = self.df["Underlying Price"] * (1 + float(self.opt["risk.pct"]))
-        self.df["Price Up"] = greeks.val(price_up, self.df["Strike"], 0.01, 0, self.df["d1"], self.df["d1"],
+        price_up = self.df["Underlying Price"] * (1 + float(self.opt["risk.pct"]))
+        price_down = self.df["Underlying Price"] * (1 - float(self.opt["risk.pct"]))
+        self.df["Price Up"] = greeks.val(price_up, self.df["Strike"], 0.01, 0, self.df["d1"], self.df["d2"],
                                          self.df["Days"], self.df["Side"]) - greeks.val(self.df["Underlying Price"],
                                                                                         self.df["Strike"], 0.01, 0,
                                                                                         self.df["d1"],
@@ -130,10 +130,10 @@ class Optimiser(PortfolioStrategy):
                                                                                         self.df["Days"],
                                                                                         self.df["Side"])
 
-        self.df["Price Down"] = greeks.val(price_down, self.df["Strike"], 0, 0,
+        self.df["Price Down"] = greeks.val(price_down, self.df["Strike"], 0.01, 0,
                                            self.df["d1"], self.df["d2"], self.df["Days"],
                                            self.df["Side"]) - greeks.val(self.df["Underlying Price"],
-                                                                         self.df["Strike"], 0, 0, self.df["d2"],
+                                                                         self.df["Strike"], 0.01, 0, self.df["d1"],
                                                                          self.df["d2"], self.df["Days"],
                                                                          self.df["Side"])
 
@@ -167,6 +167,8 @@ class Optimiser(PortfolioStrategy):
         data.create_scalar(self.db, "v_max_trades", "Maximum rebalancing trades allowed", self.opt["max.trades"])
         data.create_scalar(self.db, "v_max_pos_mon", "Maximum monthly open positions allowed", self.opt["max.pos.mon"])
         data.create_scalar(self.db, "v_max_risk", "Maximum absolute up and down risk", self.opt["max.risk"])
+        data.create_scalar(self.db, "v_min_price", "Minimum option price permitted", self.opt["min.price"])
+        data.create_scalar(self.db, "v_max_price", "Maximum option price permitted", self.opt["max.price"])
 
         # Parameter now the multi-dimensional parameters
         data.create_parameter(self.db, "p_y", "Existing position data",

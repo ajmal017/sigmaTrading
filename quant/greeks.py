@@ -22,9 +22,9 @@ def val(s, k, r, q, d1, d2, t, side: str):
     :param side: string defining whether put or call
     :return:
     """
-    v = np.where(side == "P",
-                 np.exp(-r * t) * k * phi(-d2) - s * np.exp(-q * t) * phi(-d1),
-                 s * np.exp(-q * t) * phi(d1) - np.exp(-r * t) * k * phi(d2) )
+    v = np.where(side == "p",
+                 np.exp(-r * t) * k * norm.cdf(-d2) - s * np.exp(-q * t) * norm.cdf(-d1),
+                 s * np.exp(-q * t) * norm.cdf(d1) - np.exp(-r * t) * k * norm.cdf(d2))
     return v
 
 
