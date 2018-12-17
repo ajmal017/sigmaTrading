@@ -9,19 +9,20 @@ import numpy as np
 
 
 # TODO: Implement value calculation for Black and Scholes
-def val(s, k, r, q, d1, d2, t, side: str):
+def val(s, k, r, q, sigma, t, side: str):
     """
     Standard option value calculation for Black and Scholes
     :param s: spot
     :param k: strike
     :param r:
     :param q:
-    :param d1:
-    :param d2:
+    :param sigma:
     :param t: time to expiry in years
     :param side: string defining whether put or call
     :return:
     """
+    d1 = d_one(s, k, r, q, sigma, t)
+    d2 = d_two(s, k, r, q, sigma, t)
     v = np.where(side == "p",
                  np.exp(-r * t) * k * norm.cdf(-d2) - s * np.exp(-q * t) * norm.cdf(-d1),
                  s * np.exp(-q * t) * norm.cdf(d1) - np.exp(-r * t) * k * norm.cdf(d2))

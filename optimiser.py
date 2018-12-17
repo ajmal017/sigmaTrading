@@ -122,19 +122,18 @@ class Optimiser(PortfolioStrategy):
         #  calculated backwards from VaR or something.
         price_up = self.df["Underlying Price"] * (1 + float(self.opt["risk.pct"]))
         price_down = self.df["Underlying Price"] * (1 - float(self.opt["risk.pct"]))
-        self.df["Price Up"] = greeks.val(price_up, self.df["Strike"], 0.01, 0, self.df["d1"], self.df["d2"],
+        self.df["Price Up"] = greeks.val(price_up, self.df["Strike"], 0.01, 0, self.df["Vol"],
                                          self.df["Days"], self.df["Side"]) - greeks.val(self.df["Underlying Price"],
                                                                                         self.df["Strike"], 0.01, 0,
-                                                                                        self.df["d1"],
-                                                                                        self.df["d2"],
+                                                                                        self.df["Vol"],
                                                                                         self.df["Days"],
                                                                                         self.df["Side"])
 
         self.df["Price Down"] = greeks.val(price_down, self.df["Strike"], 0.01, 0,
-                                           self.df["d1"], self.df["d2"], self.df["Days"],
+                                           self.df["Vol"], self.df["Days"],
                                            self.df["Side"]) - greeks.val(self.df["Underlying Price"],
-                                                                         self.df["Strike"], 0.01, 0, self.df["d1"],
-                                                                         self.df["d2"], self.df["Days"],
+                                                                         self.df["Strike"], 0.01, 0,
+                                                                         self.df["Vol"], self.df["Days"],
                                                                          self.df["Side"])
 
         # ACTUAL GDX CREATION STARTS HERE
