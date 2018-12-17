@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from strategy import PortfolioStrategy
 from quant import greeks, margins
-from gms import data
+from gms import data, code
 import boto3
 import json
 import utils
@@ -195,15 +195,22 @@ class Optimiser(PortfolioStrategy):
         data.create_parameter(self.db, "p_months", "Months until expiry", [self.df["Financial Instrument"]], "sparse",
                               self.df["Month"])
 
-    def run_gams(self):
+    def run_gams(self, from_file=False):
         """
         Retrieves optimisation model from the model repo and runs it
+        :param from_file: gets formulation from text file
         :return:
         """
+        response = ""
+        if not from_file:
+            self.logger.log("Getting the most recent formulation")
+            response = code.get_code("gamsCode")["code"]
+
         self.logger.log("Running GAMS job")
-        # TODO: Implement GAMS code retrieval from the DB and then
-        #   implement adding job from a string
-        model = self.ws.add_job_from_file("spo.gms")
+        if from_file:
+            model = self.ws.add_job_from_file("spo.gms")
+        else:
+            model = self.ws.add_job_from_string(response)
         model.run(databases=self.db)
 
     def import_gdx(self, fn=None):

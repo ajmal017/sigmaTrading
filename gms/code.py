@@ -10,7 +10,7 @@ import pandas as pd
 from utils.logger import Logger, LogLevel
 
 
-def get_code(tbl: str, version: int = None) -> list:
+def get_code(tbl: str, version: int = None):
     """
     Retrieve GAMS optimisation code from Dynamo DB table
     :param tbl: Table name
@@ -37,7 +37,9 @@ def get_code(tbl: str, version: int = None) -> list:
 
     log.log("Importing optimisation formulation version " + str(version))
     response = table.query(KeyConditionExpression=Key("version").eq(version))
-    return response["Items"]
+    response["Items"][0]["code"] = "* Formulation version " + str(version) + "\n" + \
+                                   response["Items"][0]["code"]
+    return response["Items"][0]
 
 
 def upload_code(tbl: str, fn: str, opt: str = None, version=None):
@@ -57,7 +59,7 @@ def upload_code(tbl: str, fn: str, opt: str = None, version=None):
         with open(opt, 'r') as m:
             opts = m.read()
     else:
-        opts = None
+        opts = " "
 
     # Open the data table and insert item
     db = boto3.resource('dynamodb', region_name='us-east-1',
