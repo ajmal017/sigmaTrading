@@ -27,7 +27,7 @@ if __name__ == "__main__":
     if args.c is not None:
         # Do code upload
         if args.version is not None:
-            code.upload_code("gamsCode", args.c, args.version)
+            code.upload_code("gamsCode", args.c, version=args.version)
         else:
             code.upload_code("gamsCode", args.c)
 

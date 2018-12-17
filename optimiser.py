@@ -195,20 +195,20 @@ class Optimiser(PortfolioStrategy):
         data.create_parameter(self.db, "p_months", "Months until expiry", [self.df["Financial Instrument"]], "sparse",
                               self.df["Month"])
 
-    def run_gams(self, from_file=False):
+    def run_gams(self, fn=None):
         """
         Retrieves optimisation model from the model repo and runs it
-        :param from_file: gets formulation from text file
+        :param fn: gets formulation from text file
         :return:
         """
         response = ""
-        if not from_file:
+        if fn is None:
             self.logger.log("Getting the most recent formulation")
             response = code.get_code("gamsCode")["code"]
 
         self.logger.log("Running GAMS job")
-        if from_file:
-            model = self.ws.add_job_from_file("spo.gms")
+        if fn is not None:
+            model = self.ws.add_job_from_file(fn)
         else:
             model = self.ws.add_job_from_string(response)
         model.run(databases=self.db)
@@ -372,10 +372,6 @@ if __name__ == "__main__":
     parser.add_argument("--dtg", action="store", help="DTG for Dynamo DB market snapshot retrieval.")
 
     args = parser.parse_args()
-
-    if len(sys.argv) == 1:
-        parser.print_help()
-        parser.exit(1)
 
     if args.c is None:
         conf_file = "config.cf"

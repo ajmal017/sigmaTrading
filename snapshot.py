@@ -184,11 +184,7 @@ class Snapshot(TwsTool):
         print(self.chain)
 
 
-def main():
-    """
-    Main margin calculation code
-    :return:
-    """
+if __name__ == "__main__":
     tws = Snapshot()
 
     tws.connect("localhost", 4001, 12)
@@ -198,6 +194,3 @@ def main():
     tws.export_dynamo()
     tws.disconnect()
 
-
-if __name__ == "__main__":
-    main()

@@ -10,14 +10,15 @@ import pandas as pd
 from utils.logger import Logger, LogLevel
 
 
-def get_code(tbl: str, version: int = None):
+def get_code(tbl: str, version: int = None, loglevel=LogLevel.normal):
     """
     Retrieve GAMS optimisation code from Dynamo DB table
     :param tbl: Table name
     :param version: Code version, if None, then get the latest
+    :param loglevel:
     :return: list of code (string) and options file (string)
     """
-    log = Logger(LogLevel.normal, "GAMS code import")
+    log = Logger(loglevel, name="GAMS code import")
     db = boto3.resource('dynamodb', region_name='us-east-1',
                         endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
     table = db.Table(tbl)
@@ -33,7 +34,7 @@ def get_code(tbl: str, version: int = None):
 
         dt = pd.DataFrame.from_dict(res)
         version = max(dt["version"])
-        log.log("The latest version is " + str(version))
+        log.verbose("The latest version is " + str(version))
 
     log.log("Importing optimisation formulation version " + str(version))
     response = table.query(KeyConditionExpression=Key("version").eq(version))
