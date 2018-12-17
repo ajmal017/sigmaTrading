@@ -40,7 +40,7 @@ def get_code(tbl: str, version: int = None) -> list:
     return response["Items"]
 
 
-def upload_code(tbl: str, fn: str, opt: str, version=None):
+def upload_code(tbl: str, fn: str, opt: str = None, version=None):
     """
     Upload next version of GAMS code to Dynamo DB
     :param tbl: Dynamo DB table name
@@ -53,8 +53,11 @@ def upload_code(tbl: str, fn: str, opt: str, version=None):
     # Read the file as one long string
     with open(fn, 'r') as m:
         code = m.read()
-    with open(opt, 'r') as m:
-        opts = m.read()
+    if opt is not None:
+        with open(opt, 'r') as m:
+            opts = m.read()
+    else:
+        opts = None
 
     # Open the data table and insert item
     db = boto3.resource('dynamodb', region_name='us-east-1',
@@ -72,8 +75,8 @@ def upload_code(tbl: str, fn: str, opt: str, version=None):
             res = res + response["Items"]
 
         dt = pd.DataFrame.from_dict(res)
-        version = max(dt["version"]) + 1
         log.log("Latest version in DB is " + str(version))
+        version = max(map(int, dt["version"])) + 1
 
     log.log("Uploading GAMS formulation as version " + str(version))
     response = table.put_item(Item={"code": code, "opts": opts, "version": str(version)})

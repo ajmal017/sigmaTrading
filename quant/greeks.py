@@ -24,8 +24,7 @@ def val(s, k, r, q, d1, d2, t, side: str):
     """
     v = np.where(side == "P",
                  np.exp(-r * t) * k * phi(-d2) - s * np.exp(-q * t) * phi(-d1),
-                 s * np.exp(-q * t) * phi(d1) - np.exp(-r * t) * k * phi(d2)
-    )
+                 s * np.exp(-q * t) * phi(d1) - np.exp(-r * t) * k * phi(d2) )
     return v
 
 
