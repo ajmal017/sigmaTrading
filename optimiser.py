@@ -18,6 +18,7 @@ from utils import logger
 from utils.logger import LogLevel
 from tws import tools
 import argparse
+import sys
 
 
 class Optimiser(PortfolioStrategy):
@@ -363,6 +364,10 @@ if __name__ == "__main__":
     parser.add_argument("--dtg", action="store", help="DTG for Dynamo DB market snapshot retrieval.")
 
     args = parser.parse_args()
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        parser.exit(1)
 
     if args.c is None:
         conf_file = "config.cf"

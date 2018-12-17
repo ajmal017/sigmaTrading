@@ -9,6 +9,7 @@ Date: 17. December 2018
 import argparse
 from utils import data
 from gms import code
+import sys
 
 if __name__ == "__main__":
     # Process command line arguments
@@ -17,6 +18,10 @@ if __name__ == "__main__":
     parser.add_argument("-d", action="store", help="Upload market data CSV")
 
     args = parser.parse_args()
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        parser.exit(1)
 
     if args.c is not None:
         # Do code upload
