@@ -9,6 +9,9 @@ Date: 11. December 2018
 from ibapi.contract import Contract
 from ibapi.wrapper import TickType, TickAttrib
 from tws.tws import TwsTool
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+import pandas as pd
 import numpy as np
 import time
 import boto3
@@ -44,10 +47,13 @@ class Snapshot(TwsTool):
         super().__init__(name="Snapshot Scraper")
 
         self.chain = []
+        self.months = []
 
-        self.strikes = np.array(range(0, 120)) / 2 + 40
-        # TODO: This needs to be automatic
-        self.months = ["201901", "201902", "201903", "201904", "201905", "201906"]
+        self.strikes = np.array(range(0, 100)) / 2 + 40
+
+        for i in range(2, 7+1):
+            tmp = datetime.today() + relativedelta(months=+i)
+            self.months.append(tmp.strftime("%Y%m"))
 
         self.cont = Contract()
         self.cont.symbol = "CL"
@@ -62,37 +68,39 @@ class Snapshot(TwsTool):
         :return:
         """
 
+        self.logger.log("Creating instruments and requesting data")
         sides = ["c", "p"]
-        action = ["BUY", "SELL"]
         o = int(self.nextId)
         for m in self.months:
+            self.logger.log("Requesting month " + m)
             for i in self.strikes:
                 for j in sides:
-                    for k in action:
-                        self.chain.append({"id": o,
-                                           "strike": i,
-                                           "side": j,
-                                           "action": k,
-                                           "expiry": m})
-                        o = o + 1
+                    str_s = "CALL" if str(j) == "c" else "PUT"
+                    str_f = self.cont.symbol + " " + self.cont.secType + " (" + \
+                            self.cont.tradingClass + ") " + \
+                            datetime.strptime(m, "%Y%m").strftime("%b'%y") + \
+                            " " + "{:g}".format(i) + " " + \
+                            str_s + " @" + self.cont.exchange
+                    self.chain.append({"id": o,
+                                       "Financial Instrument": str_f,
+                                       "Strike": i,
+                                       "Side": j.upper(),
+                                       "Expiry": m,
+                                       "Bid": -1,
+                                       "Ask": -1,
+                                       "Delta": -1})
+                    self.cont.right = j.upper()
+                    self.cont.strike = i
+                    self.cont.lastTradeDateOrContractMonth = m
 
-    def req_margins(self):
-        """
-        Requests data
-        :return:
-        """
-        for i in self.chain:
+                    time.sleep(1/40)
+                    self.reqMktData(o, self.cont, genericTickList="",
+                                    snapshot=True, regulatorySnapshot=False,
+                                    mktDataOptions=[])
+                    o = o + 1
+        self.reqAccountUpdates(True, "DU337774")
 
-            self.cont.right = i["side"].upper()
-            self.cont.strike = i["strike"]
-            self.cont.lastTradeDateOrContractMonth = i["expiry"]
-
-            time.sleep(1/40)
-            self.reqMktData(i["id"], self.cont, genericTickList="",
-                            snapshot=True, regulatorySnapshot=False,
-                            mktDataOptions=[])
-
-    def tickPrice(self, req_id: int, tick_type: TickType, price:float,
+    def tickPrice(self, req_id: int, tick_type: TickType, price: float,
                   attrib: TickAttrib):
         """
         Market tick data override for snapshot market data retrieval
@@ -104,14 +112,13 @@ class Snapshot(TwsTool):
         """
         for i in self.chain:
             if i["id"] == req_id:
-                # TODO: Check if the tick type values are correct
                 if tick_type == 1:
                     i["Bid"] = price
                 elif tick_type == 2:
                     i["Ask"] = price
 
     def tickOptionComputation(self, req_id: int, tick_type: TickType,
-                              implied_vol: float, delta: float, opt_price: float, pv_dividend:float,
+                              implied_vol: float, delta: float, opt_price: float, pv_dividend: float,
                               gamma: float, vega: float, theta: float, und_price: float):
         """
         Option computation and greek data retrieval override for saving the snapshot data.
@@ -136,50 +143,73 @@ class Snapshot(TwsTool):
                 i["Gamma"] = gamma
                 i["Theta"] = theta
                 i["Vega"] = vega
-                i["Vol"] = implied_vol
-                i["ul price"] = und_price
+                i["Implied Vol. %"] = implied_vol
+                i["Underlying Price"] = und_price
+
+    def updatePortfolio(self, contract: Contract, position: float,
+                        market_price: float, market_value: float,
+                        average_cost: float, unrealized_pnl: float,
+                        realized_pnl: float, account_name: str):
+        """
+        Account position update override
+        :param contract:
+        :param position:
+        :param market_price:
+        :param market_value:
+        :param average_cost:
+        :param unrealized_pnl:
+        :param realized_pnl:
+        :param account_name:
+        :return:
+        """
+        # TODO: This needs to update the option chain, we need contract IDs beforehand though
+        pass
 
     def wait_to_finish(self):
         """
         Waits until all margin data has been received
         :return:
         """
-        self.logger("Waiting for all market data to arrive")
+        self.logger.log("Waiting for all market data to arrive")
         found = False
+        c1 = 0
         while not found:
+            c_prev = c1
+            c1 = 0
             found = True
+
             for i in self.chain:
-                if "Delta" not in i:
+                if i["Ask"] == -1 and i["Bid"] == -1:
                     found = False
+                    c1 = c1 + 1
+            self.logger.log(str(c1) + " instruments of " + str(len(self.chain)) + " missing")
             time.sleep(0.5)
-        self.logger("All data has been received, proceeding")
+            # Break loop when two loops in a row are with same missing rows
+            if c_prev == c1:
+                break
+
+        self.logger.log("All available data has been received, proceeding")
 
     def prepare_df(self):
         """
         Prepares market snapshot data frame for export
         :return:
         """
-        pass
+        df = pd.DataFrame(self.chain)
+        df["Mid"] = (df["Ask"] + df["Bid"]) / 2
+        df["Spread"] = df["Ask"] - df["Bid"]
+        df["Days to Last Trading Day"] = 30
+        df["Position"] = 0
+        df["Avg Price"] = 0
+
+        # TODO: All -1 need to be replaces with NaNs
+        df.to_csv("./data/out.csv", index=None)
 
     def export_dynamo(self, tbl="mktData"):
         """
         Exports the margins to dynamoDB
         :param tbl: Dynamo DB table to write the margins to
         :return:
-        """
-        """
-        days: number
-        delta: number
-        exchange: string
-        expiry: string
-        lastTradingDay: string
-        longId: number
-        marginLong: number
-        marginShort: number
-        shortId: number
-        side: string
-        symbol: string
-        ulPrice: number
         """
         self.logger("Exporting market data snapshot to Dynamo DB table " + str(tbl))
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1',
@@ -206,8 +236,7 @@ if __name__ == "__main__":
 
     tws.connect("localhost", 4001, 12)
     tws.create_instruments()
-    tws.req_margins()
-    #tws.wait_to_finish()
-    #tws.prepare_df()
-    #tws.export_dynamo()
+    tws.wait_to_finish()
+    tws.prepare_df()
+    # tws.export_dynamo()
     tws.disconnect()

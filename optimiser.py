@@ -357,6 +357,13 @@ class Optimiser(PortfolioStrategy):
         df_new.to_csv(fn, index=False)
         utils.data.remove_last_csv_newline(fn)
 
+    def get_mkt_data_snapshot(self):
+        """
+        Gets market data snapshot from TWS
+        :return:
+        """
+        self.logger.error("TWS Snapshot retrieval not implemented")
+
 
 if __name__ == "__main__":
     # Process command line options
@@ -365,6 +372,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", action="store", help="Path to input data CSV file")
     parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode. Log only errors.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Turn on verbose logging")
+    parser.add_argument("--tws", action="store_true", help="Import market data from TWS")
     parser.add_argument("--db", action="store_true", help="Export optimisation results to Dynamo DB")
     parser.add_argument("--xml", action="store", help="Export basket as TWS compatible XML")
     parser.add_argument("--csv", action="store", help="Export basket as TWS compatible CSV")
@@ -386,7 +394,10 @@ if __name__ == "__main__":
     # Now the main code
     o = Optimiser(conf_file, loglevel=log)
 
-    if args.i is None:
+    # Figure out where to get input data
+    if args.tws:
+        o.get_mkt_data_snapshot()
+    elif args.i is None:
         o.get_mkt_data_dynamo(dtg=args.dtg)
     else:
         o.get_mkt_data_csv(args.i)
