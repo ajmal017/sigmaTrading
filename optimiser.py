@@ -56,6 +56,13 @@ class Optimiser(PortfolioStrategy):
 
         # Eliminate all NA
         # df.loc[df['column_name'].isin(some_values)]
+        # TODO: WHat do I do when I have no market data on instrument? Close the position?
+        #   I can figure out the prices but what about volatility? Replace it with the closest
+        #   one? For that we need a volatility model based on the data frame.
+        # TODO: Fit a neural net to estimate missing volatilities based on strikes and expiry.
+        # self.df.loc[pd.isna(self.df["Bid"]), "Mid"] = 0.0
+        # self.df.loc[pd.isna(self.df["Bid"]), "Bid"] = 0.0
+
         self.df = self.df[pd.notnull(self.df['Mid'])]
         self.df = self.df[pd.notnull(self.df['Delta'])]
         self.df = self.df[pd.notnull(self.df['Gamma'])]
@@ -134,6 +141,7 @@ class Optimiser(PortfolioStrategy):
                                                                          self.df["Strike"], 0.01, 0,
                                                                          self.df["Vol"], self.df["Days"],
                                                                          self.df["Side"])
+
 
         # ACTUAL GDX CREATION STARTS HERE
         # Create sets for data
