@@ -12,6 +12,7 @@ from tws.tws import TwsTool
 import numpy as np
 import time
 import boto3
+import argparse
 
 """
 The necessary columns are:
@@ -108,8 +109,6 @@ class Snapshot(TwsTool):
                     i["Bid"] = price
                 elif tick_type == 2:
                     i["Ask"] = price
-                elif tick_type == 5:
-                    i["Last"] = price
 
     def tickOptionComputation(self, req_id: int, tick_type: TickType,
                               implied_vol: float, delta: float, opt_price: float, pv_dividend:float,
@@ -155,6 +154,13 @@ class Snapshot(TwsTool):
             time.sleep(0.5)
         self.logger("All data has been received, proceeding")
 
+    def prepare_df(self):
+        """
+        Prepares market snapshot data frame for export
+        :return:
+        """
+        pass
+
     def export_dynamo(self, tbl="mktData"):
         """
         Exports the margins to dynamoDB
@@ -175,22 +181,33 @@ class Snapshot(TwsTool):
         symbol: string
         ulPrice: number
         """
+        self.logger("Exporting market data snapshot to Dynamo DB table " + str(tbl))
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1',
                                   endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
         table = dynamodb.Table(tbl)
         # TODO: This needs to be in proper format
         # {"inst": self.cont.symbol, "date": dtg, "data":}
-        #table.put_item()
-        print(self.chain)
+        response = table.put_item()
+        self.logger.log(str(response))
 
 
 if __name__ == "__main__":
+    # Process command line arguments first
+    parser = argparse.ArgumentParser("Market data capture tool")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Produce verbose output")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Minimal logging, only output errors")
+    parser.add_argument("--db", action="store_true", help="Write snapshot to Dynamo DB")
+    parser.add_argument("--csv", action="store", help="Write snapshot to given CSV file")
+
+    args = parser.parse_args()
+
+    # Now the actual stuff
     tws = Snapshot()
 
     tws.connect("localhost", 4001, 12)
     tws.create_instruments()
     tws.req_margins()
-    tws.wait_to_finish()
-    tws.export_dynamo()
+    #tws.wait_to_finish()
+    #tws.prepare_df()
+    #tws.export_dynamo()
     tws.disconnect()
-

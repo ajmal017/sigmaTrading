@@ -18,7 +18,6 @@ from utils import logger
 from utils.logger import LogLevel
 from tws import tools
 import argparse
-import sys
 
 
 class Optimiser(PortfolioStrategy):
