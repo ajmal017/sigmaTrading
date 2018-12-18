@@ -9,7 +9,7 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 from strategy import PortfolioStrategy
-from quant import greeks, margins
+from quant import greeks, margins, nnet
 from gms import data, code
 import boto3
 import json
@@ -54,23 +54,14 @@ class Optimiser(PortfolioStrategy):
         """
         self.logger.log("Preparing optimiser input")
 
-        # Eliminate all NA
-        # df.loc[df['column_name'].isin(some_values)]
-        # TODO: WHat do I do when I have no market data on instrument? Close the position?
-        #   I can figure out the prices but what about volatility? Replace it with the closest
-        #   one? For that we need a volatility model based on the data frame.
-        # TODO: Fit a neural net to estimate missing volatilities based on strikes and expiry.
-        # self.df.loc[pd.isna(self.df["Bid"]), "Mid"] = 0.0
-        # self.df.loc[pd.isna(self.df["Bid"]), "Bid"] = 0.0
+        self.df.loc[pd.isna(self.df["Bid"]), "Bid"] = 0.0
+        self.df.loc[pd.isna(self.df["Ask"]), "Ask"] = 1000
+        self.df.loc[pd.isna(self.df["Spread"]), "Spread"] = 1000
 
-        self.df = self.df[pd.notnull(self.df['Mid'])]
         self.df = self.df[pd.notnull(self.df['Delta'])]
         self.df = self.df[pd.notnull(self.df['Gamma'])]
         self.df = self.df[pd.notnull(self.df['Theta'])]
         self.df = self.df[pd.notnull(self.df['Vega'])]
-        self.df = self.df[pd.notnull(self.df['Implied Vol. %'])]
-        # TODO: The following need to be fixed probably
-        # df['Position'] = np.where(df['Position'].isnull(), 0, df['Position'])
 
         # Add sides
         self.df['Financial Instrument'] = self.df.index
@@ -89,21 +80,21 @@ class Optimiser(PortfolioStrategy):
         # This is necessary for expiry days, so the greeks are at least somewhat finite
         self.df['Days'] = np.where(self.df['Days'] == 0, 0.00001, self.df['Days'])
 
+        # Strikes
+        self.df['Strike'] = self.df['Financial Instrument'].str.split(" ").map(lambda x: x[4])
+        self.df['Strike'] = self.df['Strike'].astype(float)
+
         # Volatility in percent
-        self.df = self.df[self.df['Implied Vol. %'] != "N/A"]
         self.df['Vol'] = self.df['Implied Vol. %'].str.replace('%', '')
         self.df['Vol'] = self.df['Vol'].astype(float) / 100
-        # TODO For whatever reason the following row does not work
-        # df = df[pd.notnull(df['Vol'])]
+
+        # Use neural net to fix the missing volatility
+        self.df = nnet.fit_iv(self.df)
 
         # Create field for contract month
         self.df['Contract Month'] = \
             [datetime.strptime(item, "%b'%y").strftime("%Y%m") for item in self.df['Financial Instrument'].
                 str.split(" ").map(lambda x: x[3])]
-
-        # Strikes
-        self.df['Strike'] = self.df['Financial Instrument'].str.split(" ").map(lambda x: x[4])
-        self.df['Strike'] = self.df['Strike'].astype(float)
 
         # Add greeks
         self.df['Underlying Price'] = self.df['Underlying Price'].as_matrix()
@@ -141,7 +132,6 @@ class Optimiser(PortfolioStrategy):
                                                                          self.df["Strike"], 0.01, 0,
                                                                          self.df["Vol"], self.df["Days"],
                                                                          self.df["Side"])
-
 
         # ACTUAL GDX CREATION STARTS HERE
         # Create sets for data
@@ -201,6 +191,9 @@ class Optimiser(PortfolioStrategy):
                               self.df["Days"] * 365)
         data.create_parameter(self.db, "p_months", "Months until expiry", [self.df["Financial Instrument"]], "sparse",
                               self.df["Month"])
+        data.create_parameter(self.db, "p_price", "Price data for options",
+                              [self.df["Financial Instrument"], ["bid", "ask"]],
+                              "full", self.df[["Financial Instrument", "Bid", "Ask"]])
 
     def run_gams(self, fn=None):
         """
@@ -365,12 +358,27 @@ class Optimiser(PortfolioStrategy):
         df_new.to_csv(fn, index=False)
         utils.data.remove_last_csv_newline(fn)
 
+    # TODO: Integrate market snapshot here
     def get_mkt_data_snapshot(self):
         """
         Gets market data snapshot from TWS
         :return:
         """
         self.logger.error("TWS Snapshot retrieval not implemented")
+
+    # TODO: Implement basket orders
+    def basket_order(self, live=False):
+        """
+        Sends basket order to TWS to execute the rebalance
+        :param live: when True, transmits orders, otherwise just saves
+        :return:
+        """
+        if live:
+            self.logger.log("Composing basket orders for automatic LIVE rebalance")
+        else:
+            self.logger.log("Composing basket orders for sending them to TWS without execution")
+
+        self.logger.error("Basket orders are not yet implemented")
 
 
 if __name__ == "__main__":
