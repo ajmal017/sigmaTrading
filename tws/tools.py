@@ -18,7 +18,11 @@ def lookup_contract_id(df, tbl: str):
     :return:
     """
     log = Logger(LogLevel.normal, "ConID retrieval")
-    log.log("Getting contract IDs from Dynamo DB table" + tbl)
+    if "conid" in df:
+        log.log("Contract IDs already present, new query not necessary")
+        return df
+    else:
+        log.log("Getting contract IDs from Dynamo DB table" + tbl)
 
     db = boto3.resource('dynamodb', region_name='us-east-1',
                         endpoint_url="https://dynamodb.us-east-1.amazonaws.com")

@@ -136,17 +136,22 @@ class Snapshot(TwsTool):
         :param und_price:
         :return:
         """
+        found = False
         for i in self.chain:
             if i["id"] == req_id:
+                found = True
                 # TODO: Check how TWS calculates the greeks, which price does it base them on?
                 # TODO: Check that the fields names are indeed correct and match with the
                 #  data frame
-                i["Delta"] = delta
-                i["Gamma"] = gamma
-                i["Theta"] = theta
-                i["Vega"] = vega
-                i["Implied Vol. %"] = "NA" if implied_vol is None else str(implied_vol * 100) + "%"
-                i["Underlying Price"] = und_price
+                if tick_type == 13:
+                    i["Delta"] = delta
+                    i["Gamma"] = gamma
+                    i["Theta"] = theta
+                    i["Vega"] = vega
+                    i["Implied Vol. %"] = "NA" if implied_vol is None else str(implied_vol * 100) + "%"
+                    i["Underlying Price"] = und_price
+        if not found:
+            self.logger.error("Unknown req id in option computation tick!")
 
     def updatePortfolio(self, contract: Contract, position: float,
                         market_price: float, market_value: float,
@@ -212,7 +217,7 @@ class Snapshot(TwsTool):
             df.loc[df["conid"] == k, "Position"] = v["position"]
             df.loc[df["conid"] == k, "Avg Price"] = v["avg price"]  # TODO: This must be divided by multiplier?
 
-        df.to_csv("./data/out.csv", index=None)
+        return df
 
     def export_dynamo(self, tbl="mktData"):
         """
@@ -246,6 +251,7 @@ if __name__ == "__main__":
     tws.connect("localhost", 4001, 12)
     tws.create_instruments()
     tws.wait_to_finish()
-    tws.prepare_df()
+    df1 = tws.prepare_df()
+    df1.to_csv("./data/out.csv", index=None)
     # tws.export_dynamo()
     tws.disconnect()

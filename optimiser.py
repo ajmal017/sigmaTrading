@@ -16,7 +16,7 @@ import json
 import utils
 from utils import logger
 from utils.logger import LogLevel
-from tws import tools
+from tws import tools, snapshot
 import argparse
 
 
@@ -358,13 +358,18 @@ class Optimiser(PortfolioStrategy):
         df_new.to_csv(fn, index=False)
         utils.data.remove_last_csv_newline(fn)
 
-    # TODO: Integrate market snapshot here
     def get_mkt_data_snapshot(self):
         """
         Gets market data snapshot from TWS
         :return:
         """
-        self.logger.error("TWS Snapshot retrieval not implemented")
+        self.logger.log("Getting market data from snapshot")
+        snap = snapshot.Snapshot()
+        snap.connect("localhost", 4001, 81)
+        snap.create_instruments()
+        snap.wait_to_finish()
+        self.df = snap.prepare_df()
+        snap.disconnect()
 
     # TODO: Implement basket orders
     def basket_order(self, live=False):
