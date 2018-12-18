@@ -42,30 +42,42 @@ class Snapshot(TwsTool):
     """
     Class implements option chain snapshot data request and retrieval logic from TWS
     """
-    def __init__(self):
+    def __init__(self, config=None):
         """
         Standard constructor for the class
         """
         super().__init__(name="Snapshot Scraper")
+
+        self.config = config
 
         self.chain = []
         self.months = []
         self.account = {}
         self.df = pd.DataFrame()
 
-        # TODO: All those input parameters need to go to options
-        self.strikes = np.array(range(0, 100)) / 2 + 40
+        p_from = int(config["price.from"])
+        p_to = int(config["price.to"])
 
-        for i in range(2, 7+1):
+        self.strikes = np.array(range(0, (p_to - p_from) * 2)) / 2 + p_from
+
+        m_start = int(config["rel.start.month"])
+        for i in range(m_start, int(config["months"])+m_start):
             tmp = datetime.today() + relativedelta(months=+i)
             self.months.append(tmp.strftime("%Y%m"))
 
         self.cont = Contract()
-        self.cont.symbol = "CL"
-        self.cont.exchange = "NYMEX"
-        self.cont.currency = "USD"
-        self.cont.secType = "FOP"
-        self.cont.tradingClass = "LO"
+        if config is None:
+            self.cont.symbol = "CL"
+            self.cont.exchange = "NYMEX"
+            self.cont.currency = "USD"
+            self.cont.secType = "FOP"
+            self.cont.tradingClass = "LO"
+        else:
+            self.cont.symbol = config["symbol"]
+            self.cont.exchange = config["exchange"]
+            self.cont.currency = config["currency"]
+            self.cont.secType = config["sectype"]
+            self.cont.tradingClass = config["class"]
 
     def create_instruments(self):
         """
@@ -81,11 +93,11 @@ class Snapshot(TwsTool):
             for i in self.strikes:
                 for j in sides:
                     str_s = "CALL" if str(j) == "c" else "PUT"
-                    str_f = self.cont.symbol + " " + self.cont.secType + " (" + \
-                            self.cont.tradingClass + ") " + \
-                            datetime.strptime(m, "%Y%m").strftime("%b'%y") + \
-                            " " + "{:g}".format(i) + " " + \
-                            str_s + " @" + self.cont.exchange
+                    str_f = self.cont.symbol + " " + self.cont.secType + " ("
+                    str_f += self.cont.tradingClass + ") "
+                    str_f += datetime.strptime(m, "%Y%m").strftime("%b'%y")
+                    str_f += " " + "{:g}".format(i) + " "
+                    str_f += str_s + " @" + self.cont.exchange
                     self.chain.append({"id": o,
                                        "Financial Instrument": str_f,
                                        "Strike": i,
@@ -231,7 +243,7 @@ class Snapshot(TwsTool):
         # Now loop through the account dict and update the position data
         for k, v in self.account.items():
             df.loc[df["conid"] == k, "Position"] = v["position"]
-            df.loc[df["conid"] == k, "Avg Price"] = v["avg price"]  # TODO: This must be divided by multiplier?
+            df.loc[df["conid"] == k, "Avg Price"] = v["avg price"] / float(self.config["mult"])
 
         self.df = df
         return df

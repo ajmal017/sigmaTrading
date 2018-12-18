@@ -364,8 +364,10 @@ class Optimiser(PortfolioStrategy):
         :return:
         """
         self.logger.log("Getting market data from snapshot")
-        snap = snapshot.Snapshot()
-        snap.connect("localhost", 4001, 81)
+        snap = snapshot.Snapshot(config=self.opt)
+        snap.connect(self.opt["host"],
+                     int(self.opt["port"]),
+                     int(self.opt["id"]) + 1)
         snap.create_instruments()
         snap.wait_to_finish()
         self.df = snap.prepare_df()
