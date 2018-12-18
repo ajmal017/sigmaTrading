@@ -64,9 +64,8 @@ class Optimiser(PortfolioStrategy):
         self.df = self.df[pd.notnull(self.df['Vega'])]
 
         # Add sides
-        self.df['Financial Instrument'] = self.df.index
         self.df['Financial Instrument'] = self.df['Financial Instrument'].astype(str)
-        self.df['Side'] = np.where(self.df.index.str.contains("PUT"), "p", "c")
+        self.df['Side'] = np.where(self.df["Financial Instrument"].str.contains("PUT"), "p", "c")
 
         self.df['Put'] = np.where(self.df['Side'] == "p", 1, 0)
         self.df['Call'] = np.where(self.df['Side'] == "c", 1, 0)
@@ -89,7 +88,8 @@ class Optimiser(PortfolioStrategy):
         self.df['Vol'] = self.df['Vol'].astype(float) / 100
 
         # Use neural net to fix the missing volatility
-        self.df = nnet.fit_iv(self.df)
+        if self.df['Vol'].isna().any():
+            self.df = nnet.fit_iv(self.df)
 
         # Create field for contract month
         self.df['Contract Month'] = \

@@ -11,6 +11,7 @@ from ibapi.wrapper import TickType, TickAttrib
 from tws.tws import TwsTool
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+from tws import tools
 import pandas as pd
 import numpy as np
 import time
@@ -48,6 +49,7 @@ class Snapshot(TwsTool):
 
         self.chain = []
         self.months = []
+        self.account = {}
 
         self.strikes = np.array(range(0, 100)) / 2 + 40
 
@@ -86,9 +88,9 @@ class Snapshot(TwsTool):
                                        "Strike": i,
                                        "Side": j.upper(),
                                        "Expiry": m,
-                                       "Bid": -1,
-                                       "Ask": -1,
-                                       "Delta": -1})
+                                       "Bid": float('nan'),
+                                       "Ask": float('nan'),
+                                       "Delta": float('nan')})
                     self.cont.right = j.upper()
                     self.cont.strike = i
                     self.cont.lastTradeDateOrContractMonth = m
@@ -143,7 +145,7 @@ class Snapshot(TwsTool):
                 i["Gamma"] = gamma
                 i["Theta"] = theta
                 i["Vega"] = vega
-                i["Implied Vol. %"] = implied_vol
+                i["Implied Vol. %"] = "NA" if implied_vol is None else str(implied_vol * 100) + "%"
                 i["Underlying Price"] = und_price
 
     def updatePortfolio(self, contract: Contract, position: float,
@@ -162,8 +164,7 @@ class Snapshot(TwsTool):
         :param account_name:
         :return:
         """
-        # TODO: This needs to update the option chain, we need contract IDs beforehand though
-        pass
+        self.account[contract.conId] = {"position": position, "avg price": average_cost}
 
     def wait_to_finish(self):
         """
@@ -179,7 +180,7 @@ class Snapshot(TwsTool):
             found = True
 
             for i in self.chain:
-                if i["Ask"] == -1 and i["Bid"] == -1:
+                if (np.isnan(i["Ask"]) and np.isnan(i["Bid"])) or i["Delta"] == float("nan"):
                     found = False
                     c1 = c1 + 1
             self.logger.log(str(c1) + " instruments of " + str(len(self.chain)) + " missing")
@@ -202,7 +203,15 @@ class Snapshot(TwsTool):
         df["Position"] = 0
         df["Avg Price"] = 0
 
-        # TODO: All -1 need to be replaces with NaNs
+        self.logger.log("Getting contract IDs from Dynamo DB")
+        df = tools.lookup_contract_id(df, "instruments")
+
+        self.logger.log("Updating account position data")
+        # Now loop through the account dict and update the position data
+        for k, v in self.account.items():
+            df.loc[df["conid"] == k, "Position"] = v["position"]
+            df.loc[df["conid"] == k, "Avg Price"] = v["avg price"]  # TODO: This must be divided by multiplier?
+
         df.to_csv("./data/out.csv", index=None)
 
     def export_dynamo(self, tbl="mktData"):

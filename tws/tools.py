@@ -6,7 +6,6 @@ Date: 12. December 2018
 """
 from xml.etree.ElementTree import Element, SubElement, ElementTree
 import boto3
-from boto3.dynamodb.conditions import Key
 import pandas as pd
 from utils.logger import LogLevel, Logger
 
@@ -18,21 +17,33 @@ def lookup_contract_id(df, tbl: str):
     :param tbl: table containing instrument names
     :return:
     """
+    log = Logger(LogLevel.normal, "ConID retrieval")
+    log.log("Getting contract IDs from Dynamo DB table" + tbl)
+
     db = boto3.resource('dynamodb', region_name='us-east-1',
                         endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
     table = db.Table(tbl)
 
-    # Loop through the table
-    # TODO: Implement logging instead of printing
-    df["conid"] = ""
-    for i, r in df.iterrows():
-        response = table.query(KeyConditionExpression=Key('instString').eq(r["Financial Instrument"]))
-        if len(response["Items"]) == 0:
-            r["conid"] = "0"
-            print("Contract ID not found, please run contract scraper!")
-        else:
-            df.loc[i, "conid"] = response["Items"][0]["conid"]
+    response = table.scan()
+    res = response["Items"]
 
+    while "LastEvaluatedKey" in response:
+        response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
+        res = res + response["Items"]
+
+    # res is list of dicts, contains instString and conid
+    res = pd.DataFrame(res)
+    res.columns = ["conid", "Financial Instrument"]
+
+    res["Financial Instrument"] = res["Financial Instrument"].astype(str)
+    df["Financial Instrument"] = df["Financial Instrument"].astype(str)
+
+    df = pd.merge(df, res, left_on="Financial Instrument", right_on="Financial Instrument")
+
+    if pd.isna(df["conid"]).any():
+        log.error("Missing contract IDs, consider running ID scraper!")
+
+    log.log("Contract ID retrieval finished")
     return df
 
 
