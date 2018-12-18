@@ -24,15 +24,15 @@ class DecimalEncoder(json.JSONEncoder):
         return super(DecimalEncoder, self).default(o)
 
 
-def train_model(s3: str, tbl: str):
+def train_model(s3: str, tbl: str, inst: str = "CL"):
     """
     Trains neural net to estimate margins
     :param s3: S3 bucket to save the model
     :param tbl: Dynamo DB table for margin data storage
+    :param inst: Instrument symbol
     :return:
     """
     # Get the data
-    inst = "CL"
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1',
                               endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
     table = dynamodb.Table(tbl)

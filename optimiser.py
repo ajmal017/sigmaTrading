@@ -16,7 +16,9 @@ import json
 import utils
 from utils import logger
 from utils.logger import LogLevel
-from tws import tools, snapshot
+from tws import tools, snapshot, tws
+from ibapi.order import Order
+from ibapi.contract import Contract
 import argparse
 
 
@@ -375,7 +377,6 @@ class Optimiser(PortfolioStrategy):
             snap.export_dynamo("mktData")
         snap.disconnect()
 
-    # TODO: Implement basket orders
     def basket_order(self, live=False):
         """
         Sends basket order to TWS to execute the rebalance
@@ -387,7 +388,33 @@ class Optimiser(PortfolioStrategy):
         else:
             self.logger.log("Composing basket orders for sending them to TWS without execution")
 
-        self.logger.error("Basket orders are not yet implemented")
+        t = tws.TwsTool("Basket Order", log_level=self.loglevel)
+        t.connect(self.opt["host"], int(self.opt["port"]), int(self.opt["id"])+2)
+
+        # Filter out correct rows
+        df_tmp = self.df[self.df["Trade"] != 0]
+
+        c = Contract()
+        c.symbol = self.opt["symbol"]
+        c.currency = self.opt["currency"]
+        c.secType = self.opt["sectype"]
+        c.exchange = self.opt["exchange"]
+
+        for i, r in df_tmp.iterrows():
+            self.logger.log(r["Financial Instrument"])
+            c.strike = r["Strike"]
+            c.right = r["Side"]
+            c.lastTradeDateOrContractMonth = r["Contract Month"]
+
+            tws_order = Order()
+            tws_order.transmit = live
+            tws_order.orderType = "LMT"
+            tws_order.action = "BUY" if int(r["Trade"]) > 0 else "SELL"
+            tws_order.totalQuantity = np.abs(int(r["Trade"]))
+            tws_order.lmtPrice = float(r["Mid"])
+
+            t.placeOrder(t.nextId, c, tws_order)
+        t.disconnect()
 
 
 if __name__ == "__main__":

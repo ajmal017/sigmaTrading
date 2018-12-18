@@ -8,7 +8,6 @@ from scipy.stats import norm
 import numpy as np
 
 
-# TODO: Implement value calculation for Black and Scholes
 def val(s, k, r, q, sigma, t, side: str):
     """
     Standard option value calculation for Black and Scholes
@@ -141,7 +140,6 @@ def charm(side, d1, d2, r, q, sigma, t):
     :return:
     """
     v1 = np.exp(-q * t) * phi(d1) * (2 * (r - q) * t - d2 * sigma * np.sqrt(t)) / (2 * t * sigma * np.sqrt(t))
-    # TODO: This normal cdf is not vectorised. Thus possibly does not work properly
     v = q * np.exp(-q * t) * norm.cdf(d1) - v1 if side == "c" else -q * np.exp(-q * t) * norm.cdf(-d1) - v1
     return v
 
