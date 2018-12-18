@@ -358,7 +358,7 @@ class Optimiser(PortfolioStrategy):
         df_new.to_csv(fn, index=False)
         utils.data.remove_last_csv_newline(fn)
 
-    def get_mkt_data_snapshot(self):
+    def get_mkt_data_snapshot(self, export_dynamo=False):
         """
         Gets market data snapshot from TWS
         :return:
@@ -369,6 +369,8 @@ class Optimiser(PortfolioStrategy):
         snap.create_instruments()
         snap.wait_to_finish()
         self.df = snap.prepare_df()
+        if export_dynamo:
+            snap.export_dynamo("mktData")
         snap.disconnect()
 
     # TODO: Implement basket orders
@@ -393,11 +395,13 @@ if __name__ == "__main__":
     parser.add_argument("-i", action="store", help="Path to input data CSV file")
     parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode. Log only errors.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Turn on verbose logging")
+    parser.add_argument("-e", "--exec", action="store_true", help="Execute automatic rebalancing", default=False)
     parser.add_argument("--tws", action="store_true", help="Import market data from TWS")
-    parser.add_argument("--db", action="store_true", help="Export optimisation results to Dynamo DB")
+    parser.add_argument("--db", action="store_true", help="Export optimisation results to Dynamo DB", default=False)
     parser.add_argument("--xml", action="store", help="Export basket as TWS compatible XML")
     parser.add_argument("--csv", action="store", help="Export basket as TWS compatible CSV")
     parser.add_argument("--dtg", action="store", help="DTG for Dynamo DB market snapshot retrieval.")
+    parser.add_argument("--live", action="store_true", help="If set, send live orders, save otherwise", default=False)
 
     args = parser.parse_args()
 
@@ -417,7 +421,7 @@ if __name__ == "__main__":
 
     # Figure out where to get input data
     if args.tws:
-        o.get_mkt_data_snapshot()
+        o.get_mkt_data_snapshot(export_dynamo=args.db)
     elif args.i is None:
         o.get_mkt_data_dynamo(dtg=args.dtg)
     else:

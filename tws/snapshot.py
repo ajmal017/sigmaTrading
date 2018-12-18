@@ -6,7 +6,7 @@ into Dynamo. Ported from Java
 Author: Peeter Meos, Sigma Research OÜ
 Date: 11. December 2018
 """
-from ibapi.contract import Contract
+from ibapi.contract import Contract, ContractDetails
 from ibapi.wrapper import TickType, TickAttrib
 from tws.tws import TwsTool
 from datetime import datetime
@@ -17,6 +17,7 @@ import numpy as np
 import time
 import boto3
 import argparse
+import json
 
 """
 The necessary columns are:
@@ -50,7 +51,9 @@ class Snapshot(TwsTool):
         self.chain = []
         self.months = []
         self.account = {}
+        self.df = pd.DataFrame()
 
+        # TODO: All those input parameters need to go to options
         self.strikes = np.array(range(0, 100)) / 2 + 40
 
         for i in range(2, 7+1):
@@ -99,6 +102,7 @@ class Snapshot(TwsTool):
                     self.reqMktData(o, self.cont, genericTickList="",
                                     snapshot=True, regulatorySnapshot=False,
                                     mktDataOptions=[])
+                    self.reqContractDetails(o, self.cont)
                     o = o + 1
         self.reqAccountUpdates(True, "DU337774")
 
@@ -118,6 +122,18 @@ class Snapshot(TwsTool):
                     i["Bid"] = price
                 elif tick_type == 2:
                     i["Ask"] = price
+
+    def contractDetails(self, req_id: int, contract_details: ContractDetails):
+        """
+        Contract details reception override
+        :param req_id:
+        :param contract_details:
+        :return:
+        """
+        for i in self.chain:
+            if req_id == i["id"]:
+                i["conid"] = contract_details.contract.conId
+                i["Days to Last Trading Day"] = contract_details.contract.lastTradeDateOrContractMonth
 
     def tickOptionComputation(self, req_id: int, tick_type: TickType,
                               implied_vol: float, delta: float, opt_price: float, pv_dividend: float,
@@ -140,9 +156,6 @@ class Snapshot(TwsTool):
         for i in self.chain:
             if i["id"] == req_id:
                 found = True
-                # TODO: Check how TWS calculates the greeks, which price does it base them on?
-                # TODO: Check that the fields names are indeed correct and match with the
-                #  data frame
                 if tick_type == 13:
                     i["Delta"] = delta
                     i["Gamma"] = gamma
@@ -203,8 +216,11 @@ class Snapshot(TwsTool):
         """
         df = pd.DataFrame(self.chain)
         df["Mid"] = (df["Ask"] + df["Bid"]) / 2
-        df["Spread"] = df["Ask"] - df["Bid"]
-        df["Days to Last Trading Day"] = 30
+        df["Spread"] = np.abs(df["Ask"] - df["Bid"])
+        df["Days to Last Trading Day"] = pd.to_datetime(df["Days to Last Trading Day"],
+                                                        format="%Y%m%d") - datetime.today()
+        df["Days to Last Trading Day"] = df["Days to Last Trading Day"].dt.days
+
         df["Position"] = 0
         df["Avg Price"] = 0
 
@@ -217,6 +233,7 @@ class Snapshot(TwsTool):
             df.loc[df["conid"] == k, "Position"] = v["position"]
             df.loc[df["conid"] == k, "Avg Price"] = v["avg price"]  # TODO: This must be divided by multiplier?
 
+        self.df = df
         return df
 
     def export_dynamo(self, tbl="mktData"):
@@ -229,10 +246,21 @@ class Snapshot(TwsTool):
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1',
                                   endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
         table = dynamodb.Table(tbl)
-        # TODO: This needs to be in proper format
-        # {"inst": self.cont.symbol, "date": dtg, "data":}
         response = table.put_item()
         self.logger.log(str(response))
+
+        mod_time = datetime.today()
+        dtg = mod_time.strftime("%y%m%d%H%M%S")
+
+        # Instrument
+        data = self.df.to_dict(orient="split")
+        data["dtg"] = int(dtg)
+        data["inst"] = self.cont.symbol
+        data["data"] = json.dumps(data["data"])
+
+        response = table.put_item(Item=data)
+
+        return response
 
 
 if __name__ == "__main__":
@@ -253,5 +281,5 @@ if __name__ == "__main__":
     tws.wait_to_finish()
     df1 = tws.prepare_df()
     df1.to_csv("./data/out.csv", index=None)
-    # tws.export_dynamo()
+    tws.export_dynamo()
     tws.disconnect()

@@ -29,7 +29,7 @@ def write_dynamo(filename: str, tbl: str, inst: str):
     :return: nothing
     """
     mod_time = os.path.getmtime(filename)
-    df = pd.read_csv(filename, index_col=0)
+    df = pd.read_csv(filename)
 
     # File modification date
     dtg = datetime.fromtimestamp(mod_time).strftime("%y%m%d%H%M%S")

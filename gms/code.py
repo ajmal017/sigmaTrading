@@ -33,11 +33,11 @@ def get_code(tbl: str, version: int = None, loglevel=LogLevel.normal):
             res = res + response["Items"]
 
         dt = pd.DataFrame.from_dict(res)
-        version = max(dt["version"])
+        version = max([int(item) for item in dt["version"]])
         log.verbose("The latest version is " + str(version))
 
     log.log("Importing optimisation formulation version " + str(version))
-    response = table.query(KeyConditionExpression=Key("version").eq(version))
+    response = table.query(KeyConditionExpression=Key("version").eq(str(version)))
     response["Items"][0]["code"] = "* Formulation version " + str(version) + "\n" + \
                                    response["Items"][0]["code"]
     return response["Items"][0]
