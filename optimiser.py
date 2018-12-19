@@ -20,6 +20,7 @@ from tws import tools, snapshot, tws
 from ibapi.order import Order
 from ibapi.contract import Contract
 import argparse
+import os
 
 
 class Optimiser(PortfolioStrategy):
@@ -31,6 +32,10 @@ class Optimiser(PortfolioStrategy):
         super().__init__("Optimiser", loglevel=loglevel)
 
         # Get the config
+        if not os.path.isfile(conf_file):
+            self.logger.error("Cannot find config file " + conf_file)
+            raise OSError
+
         self.config.read(cf)
         gams_path = self.config["optimiser"]["gams"]
         self.opt = self.config["optimiser"]
@@ -42,6 +47,10 @@ class Optimiser(PortfolioStrategy):
             gams_debug_level = DebugLevel.ShowLog
         else:
             gams_debug_level = DebugLevel.Off
+
+        if not os.path.exists(gams_path):
+            self.logger.error("Cannot find GAMS path " + gams_path)
+            raise OSError
 
         self.ws = GamsWorkspace(system_directory=gams_path,
                                 debug=gams_debug_level,
@@ -280,6 +289,10 @@ class Optimiser(PortfolioStrategy):
         self.logger.log("Adding positions to the data frame")
 
         x = res["trades"]
+        if len(x.columns) == 0:
+            self.logger.error("No results from optimiser. Infeasible solution?")
+            return
+
         x.columns = ["Financial Instrument", "side", "q"]
         x = x.pivot(index="Financial Instrument", columns="side", values="q").fillna(0)
 
@@ -400,6 +413,7 @@ class Optimiser(PortfolioStrategy):
         c.secType = self.opt["sectype"]
         c.exchange = self.opt["exchange"]
 
+        o_id = t.nextId
         for i, r in df_tmp.iterrows():
             self.logger.log(r["Financial Instrument"])
             c.strike = r["Strike"]
@@ -413,7 +427,9 @@ class Optimiser(PortfolioStrategy):
             tws_order.totalQuantity = np.abs(int(r["Trade"]))
             tws_order.lmtPrice = float(r["Mid"])
 
-            t.placeOrder(t.nextId, c, tws_order)
+            t.placeOrder(o_id, c, tws_order)
+            o_id += 1
+
         t.disconnect()
 
 
@@ -422,10 +438,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Portfolio optimiser")
     parser.add_argument("-c", action="store", help="Configuration file")
     parser.add_argument("-i", action="store", help="Path to input data CSV file")
-    parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode. Log only errors.")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Turn on verbose logging")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode. Log only errors.", default=False)
+    parser.add_argument("-v", "--verbose", action="store_true", help="Turn on verbose logging", default=False)
     parser.add_argument("-e", "--exec", action="store_true", help="Execute automatic rebalancing", default=False)
-    parser.add_argument("--tws", action="store_true", help="Import market data from TWS")
+    parser.add_argument("--tws", action="store_true", help="Import market data from TWS", default=False)
     parser.add_argument("--db", action="store_true", help="Export optimisation results to Dynamo DB", default=False)
     parser.add_argument("--xml", action="store", help="Export basket as TWS compatible XML")
     parser.add_argument("--csv", action="store", help="Export basket as TWS compatible CSV")
@@ -460,6 +476,11 @@ if __name__ == "__main__":
     o.run_gams()
     d = o.import_gdx()
     o.add_trades_to_df(d)
+
+    # No solver results, possible infeasible solution?
+    if len(d["trades"]) == 0:
+        parser.exit(1)
+
     o.opt_summary(d)
 
     # TODO: Here we need to add detection of FUT positions from assigned options
@@ -472,3 +493,5 @@ if __name__ == "__main__":
         o.export_trades_csv(args.csv)
     if args.xml:
         tools.export_portfolio_xml(o.df, args.xml)
+    if args.exec:
+        o.basket_order(args.live)

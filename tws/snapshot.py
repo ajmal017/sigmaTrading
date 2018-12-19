@@ -250,17 +250,15 @@ class Snapshot(TwsTool):
 
     def export_dynamo(self, tbl="mktData"):
         """
-        Exports the margins to dynamoDB
+        Exports the data to dynamoDB
         :param tbl: Dynamo DB table to write the margins to
         :return:
         """
-        self.logger("Exporting market data snapshot to Dynamo DB table " + str(tbl))
+
+        self.logger.log("Exporting market data snapshot to Dynamo DB table " + str(tbl))
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1',
                                   endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
         table = dynamodb.Table(tbl)
-        response = table.put_item()
-        self.logger.log(str(response))
-
         mod_time = datetime.today()
         dtg = mod_time.strftime("%y%m%d%H%M%S")
 
