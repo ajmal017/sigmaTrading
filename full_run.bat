@@ -1,0 +1,1 @@
+python optimiser.py -v --db --tws --xml ./data/basket.port.xml --csv ./data/basket.csv

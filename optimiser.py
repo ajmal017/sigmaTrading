@@ -299,9 +299,20 @@ class Optimiser(PortfolioStrategy):
         self.df = self.df.join(x, on="Financial Instrument", rsuffix="_x")
         self.df = self.df.fillna(0)
 
+        if self.df.shape[0] == 0:
+            self.logger.error("No trades from optimiser, no reason to continue")
+            return 1
+
         # Some final calculations on traded quantities
+        # What if there are only buys or sells?
+        if "buy" not in self.df:
+            self.df["buy"] = 0
+        if "sell" not in self.df:
+            self.df["sell"] = 0
+
         self.df["Trade"] = self.df["buy"] - self.df["sell"]
         self.df["NewPosition"] = self.df["Position"] + self.df["Trade"]
+        return 0
 
     def export_results_dynamo(self, dt: dict, tbl: str = None):
         """
@@ -340,7 +351,8 @@ class Optimiser(PortfolioStrategy):
     def export_trades_csv(self, fn: str):
         """
         Exports the list of trades in basket trader format (CSV)
-        Action,Quantity,Symbol,SecType,LastTradingDayOrContractMonth,Strike,Right,Exchange,Currency,TimeInForce,OrderType,LmtPrice,BasketTag,Account,OrderRef,Multiplier,
+        Action,Quantity,Symbol,SecType,LastTradingDayOrContractMonth,Strike,Right,Exchange,Currency,TimeInForce,
+        OrderType,LmtPrice,BasketTag,Account,OrderRef,Multiplier,
         BUY,1,CL,FOP,20181114,53,C,NYMEX,USD,DAY,LMT,8.58,Basket,DU337774,Basket,1000,
 
         :param fn: filename for exported data
@@ -475,10 +487,10 @@ if __name__ == "__main__":
     o.create_gdx()
     o.run_gams()
     d = o.import_gdx()
-    o.add_trades_to_df(d)
+    status = o.add_trades_to_df(d)
 
-    # No solver results, possible infeasible solution?
-    if len(d["trades"]) == 0:
+    # No solver results, possible infeasible solution or no trades?
+    if len(d["trades"]) == 0 or status == 1:
         parser.exit(1)
 
     o.opt_summary(d)

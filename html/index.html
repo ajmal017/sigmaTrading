@@ -1,72 +1,282 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description" content="Portfolio rebalancing analytics front end">
-    <meta name="author" content="Peeter Meos, Sigma Research OÜ">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="Portfolio rebalancing history front end">
+  <meta name="author" content="Peeter Meos, Sigma Research OÜ">
 
-    <!-- Bootstrap styling + some of my stuff added -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
-    <script src="https://code.jquery.com/jquery-3.3.1.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
-    <script src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
+  <!-- Bootstrap styling + some of my stuff added -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <script src="https://code.jquery.com/jquery-3.3.1.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+  <script src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
+  <!--
+  <link href="style.css" rel="stylesheet">
+  -->
 
-    <script>
-        var apiKey = 'rTHh0diaI09X8WbnK8i282vcvtyhVg3G593rz46j';
-        $(document).ready(function(){
-            $.ajaxSetup({
-                headers: {'x-api-key': apiKey}
-            });
+  <title>Portfolio balancing overview</title>
 
-            var json = (function(){
+  <!-- Plotly for greeks plotting -->
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <!-- Code for my greeks calculation -->
+  <script src="greeks.js"></script>
 
-            })();
+
+  <script>
+    var apiKey = 'rTHh0diaI09X8WbnK8i282vcvtyhVg3G593rz46j';
+    $(document).ready(function(){
+        // List of runs
+        $.ajaxSetup({
+          headers: { 'x-api-key': apiKey }
         });
 
-        // Updates run status between live and test
-        function updateStatus(id){
+        var json = (function () {
+          var json = null;
+          $.ajax({
+            headers: {
+              'x-api-key': apiKey
+            },
+            'async': false,
+            'global': false,
+            'url': "https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/runs",
+            'dataType': "json",
+            'success': function (data) {
+              json = data;
+            }
+        });
+        result = json.Items;
+        $.each(result, function(i, field){
+              var j = jQuery.parseJSON(field.opt)
+              $("#run_table").append("<tr><td>" +field.date+
+                "</td><td><div class='runid' onclick='getRun(" + field.dtg+ ")'>"+field.dtg + 
+                "</div></td><td>" + j.symbol +
+                "</td><td>" + j.account +
+                "</td><td><div id='live"+field.dtg+"' onclick='updateStatus("+field.dtg+ ")'>" + field.live +
+                "</td><td><div onclick='deleteRun("+field.dtg+ ")'>"+"Delete</div></td></tr>");
+        });
+      })();
+    });
+  </script>
 
-        }
-
-        // Retrieves run details
-        function getRun(id){
-
-        }
-
-        // Deletes given run
-        function deleteRun(id) {
-
-        }
-    </script>
-
-    <title>Portfolio Optimisation</title>
 </head>
+
 <body>
-    <h1>Optimisation Runs</h1>
-    <div id="tbl_runs"></div>
-    <h1>Run Details</h1>
-    <table>
-        <tr>
-            <td>
-                <h2>Parameters</h2>
-                <div id="tbl_params"></div>
-            </td>
-            <td>
-                <h2>Greeks</h2>
-                <div id="tbl_greeks"></div>
-            </td>
-            <td>
-                <h2>Trades</h2>
-                <div id="tbl_trades"></div>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <h2>Portfolio Positions</h2>
-                <div id="tbl_pos"></div>
-            </td>
-        </tr>
-    </table>
+  <div id="wrapper">
+
+    <!-- Sidebar
+    <div id="sidebar-wrapper">
+        <ul class="sidebar-nav">
+            <li class="sidebar-brand"><a href="#">Start Bootstrap</a></li>
+            <li><a href="#">Dashboard</a></li>
+            <li><a href="#">Shortcuts</a></li>
+            <li><a href="#">Overview</a></li>
+            <li><a href="#">Events</a></li>
+            <li><a href="#">About</a></li>
+            <li><a href="#">Services</a></li>
+            <li><a href="#">Contact</a></li>
+        </ul>
+    </div>
+    -->
+
+    <!-- Page Content -->
+    <div id="page-content-wrapper">
+        <div class="container-fluid">
+              <h1>Sigma Portfolio Balancing</h1>
+
+              <h2>Optimisation runs</h2><div id="div_runs">
+                <table id='run_table'>
+                  <thead>
+                    <tr>
+                      <th style="width:150px">Date</th>
+                      <th style="width:120px">Run</th>
+                      <th style="width:60px">Symbol</th>
+                      <th style="width:80px">Account</th>
+                      <th style="width:50px">Live</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                </table>
+              </div>
+              
+              <table>
+                <tr>
+                  <td valign="top"><h2>Parameters</h2><div id="div_parameters"></div></td>
+                  <td valign="top"><h2>Greeks</h2>
+                    <table>
+                      <tr>
+                        <td>
+                          <div id="div_greeks"></div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <div id="mon_greeks"></div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td valign="top"><h2>Trades</h2><div id="div_trades"></div></td>
+                </tr>
+              </table>
+
+              <h2>Portfolio positions</h2>
+              <div id="div_data">
+                <table id="table_data" class="display"></table>
+              </div>
+        </div>
+    </div>
+    <!-- /#page-content-wrapper -->
+
+  </div>
+  <!-- /#wrapper -->
+
+  <!-- Menu Toggle Script -->
+  <script>
+  $("#menu-toggle").click(function(e) {
+      e.preventDefault();
+      $("#wrapper").toggleClass("toggled");
+  });
+  </script>  
+ 
+  <script type="text/javascript">
+    // Delete run, currently does not work
+    function deleteRun(id) {
+      var url = 'https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/details/' + id;
+      var ask = confirm("Confirm delete run id " + id);
+      if(ask){
+        $.ajax({
+          headers: {
+            'x-api-key': apiKey
+          },
+          'async': false,
+          'global': false,
+          'url': url,
+          'type': 'DELETE',
+          'dataType': "json",
+          success: function(result) {
+            console.log(result);
+          }
+        });
+      }
+    }
+
+    // Update run status between live and test
+    function updateStatus(id) {
+      var url = 'https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/details/' + id;
+      $.ajax({
+        headers: {
+          'x-api-key': apiKey
+        },
+        'async': false,
+        'global': false,
+        'url': url,
+        'type': 'POST',
+        'dataType': "json",
+        success: function(result) {
+          $("#live"+id).html(""+result.Attributes.live)
+        }
+      });
+    }
+
+    function getRun(id){
+      // Empty the fields
+      $("#div_parameters").html("")
+      $("#div_greeks").html("")
+      $("#mon_greeks").html("")
+      $("#div_trades").html("")
+      $("#table_data").html("")
+
+      var url = 'https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/details/' + id;
+
+      // Get the detailed run
+      var json = (function () {
+        var json = null;
+        $.ajax({
+          headers: {
+            'x-api-key': apiKey
+          },
+          'async': false,
+          'global': false,
+          'url': url,
+          'dataType': "json",
+          'success': function (data) {
+            json = data;
+          }
+        });
+        return json.Items;
+      })();
+
+      // Parameters
+      $("#div_parameters").append("<table>")
+      $("#div_parameters").append("<tr><th>Parameter</th><th>Value</th></tr>")
+      $.each(jQuery.parseJSON(json[0].opt), function(index, element) {
+        $("#div_parameters").append("<tr><td>"+index+"</td><td>"+element+"</td></tr>")
+      });
+      $("#div_parameters").append("</table>")
+
+      // Greeks
+      $("#div_greeks").append("<table>")
+      $("#div_greeks").append("<tr><th>Greek</th><th>New</th><th>Old</th></tr>")
+      $.each(jQuery.parseJSON(json[0].greeks), function(index, element) {
+        var s = ""
+        s = "<tr><td>"+element.s_greeks+"</td><td>"
+        if ('new' in element) s = s + element.new
+        s = s + "</td><td>"  
+        if ('old' in element) s = s + element.old
+        $("#div_greeks").append(s)
+      });
+      $("#div_greeks").append("</table>")
+
+      // Monthly greeks
+      if ('monGreeks' in json[0]) {
+        $("#mon_greeks").append("<table>")
+        $("#mon_greeks").append("<thead><tr><th>Greek</th><th>Month</th><th>New</th><th>Old</th></tr></thead>")
+        $.each(jQuery.parseJSON(json[0].monGreeks), function(index, element) {
+          var s = ""
+          s = "<tr><td>"+element.s_greeks+"</td>"
+          s = s + "<td>"+element.s_month+"</td><td>"
+          s = 'new' in element ? s + element.new : s
+          s = s + "</td><td>" 
+          s = 'old' in element ? s + element.old : s
+          s = s + "</td>"
+          $("#mon_greeks").append(s)
+        });
+        $("#mon_greeks").append("</table>")
+      }
+
+      // Trades
+      $("#div_trades").append("<table>")
+      $("#div_trades").append("<tr><th>Instrument</th><th>Trade</th><th>Quantity</th></tr>")
+      $.each(jQuery.parseJSON(json[0].trades), function(index, element) {
+        $("#div_trades").append("<tr><td>"+element.s_names+"</td><td>"+element.s_trade+"</td><td>"+element.val+"</td></tr>")
+      });
+      $("#div_trades").append("</table>")
+
+      // Data
+      $("#table_data").append("<thead><tr class='data'><th class='data'>Instrument</th><th class='data'>Bid</th><th class='data'>Ask</th>" +
+        "<th class='data'>Mid</th><th class='data'>Avg Price</th>"+
+        "<th class='data'>Expiry(days)</th><th class='data'>Impl Vol</th><th class='data'>Delta</th><th class='data'>Gamma</th><th class='data'>Theta</th>"+
+        "<th class='data'>Vega</th><th class='data'>Previous position</th><th class='data'>New position</th></tr></thead>")
+      
+      $.each(jQuery.parseJSON(json[0].data), function(index, element) {
+        $("#table_data").append("<tr><td class='data'>"+element["Financial.Instrument"]+
+          "</td><td class='data'>"+element["Bid"]+
+          "</td><td class='data'>"+element["Ask"]+
+          "</td><td class='data'>"+element["Mid"]+
+          "</td><td class='data'>"+element["Avg.Price"]+
+          "</td><td class='data'>"+element["Days.to.Last.Trading.Day"]+
+          "</td><td class='data'>"+element["Implied.Vol..."]+
+          "</td><td class='data'>"+element["Delta"]+
+          "</td><td class='data'>"+element["Gamma"]+
+          "</td><td class='data'>"+element["Theta"]+
+          "</td><td class='data'>"+element["Vega"]+
+          "</td><td class='data'>"+element["Position"]+
+          "</td><td class='data'>"+element["NewPosition"]+
+          "</td></tr>")
+      });
+    }
+  </script>
 </body>
 </html>

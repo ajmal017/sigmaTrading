@@ -57,11 +57,13 @@ class Snapshot(TwsTool):
 
         p_from = int(config["price.from"])
         p_to = int(config["price.to"])
+        p_step = float(config["price.step"])
 
-        self.strikes = np.array(range(0, (p_to - p_from) * 2)) / 2 + p_from
+        self.strikes = np.array(range(0, int(round((p_to - p_from) / p_step)))) * p_step + p_from
 
         m_start = int(config["rel.start.month"])
-        for i in range(m_start, int(config["months"])+m_start):
+        m_step = int(config["rel.step.month"])
+        for i in range(m_start, int(config["months"])+m_start, m_step):
             tmp = datetime.today() + relativedelta(months=+i)
             self.months.append(tmp.strftime("%Y%m"))
 
