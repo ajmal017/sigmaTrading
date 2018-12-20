@@ -244,10 +244,18 @@ class Optimiser(PortfolioStrategy):
 
         x["total_greeks"] = x["total_greeks"].pivot(index="s_greeks", columns="s_age", values="val")
         x["total_greeks"].reset_index(level=0, inplace=True)
+        # in case of empty portfolio
+        if x["total_greeks"].shape[1] == 2:
+            x["total_greeks"]["old"] = 0
 
         # Dual indexes are a bitch, is there a better way?
         x["monthly_greeks"] = x["monthly_greeks"].set_index(["s_greeks", "s_month", "s_age"]).unstack(level=-1)
         x["monthly_greeks"].reset_index(level=1, inplace=True)
+
+        # in case of empty portfolio
+        if x["monthly_greeks"].shape[1] == 2:
+            x["monthly_greeks"]["old"] = 0
+
         x["monthly_greeks"].columns = ["s_month", "new", "old"]
         x["monthly_greeks"]["s_greeks"] = x["monthly_greeks"].index
 

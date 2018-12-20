@@ -41,7 +41,6 @@ class LogLevel(Enum):
 class Logger:
     """
     Implementation of simple logging functionality
-    TODO: Logging into file, logging into a database
     """
     def __init__(self, l: LogLevel, name: str, fn=""):
         """
@@ -66,9 +65,11 @@ class Logger:
         :return: nothing
         """
         if self.f is not None:
-            print(datetime.datetime.now(), ":", l.name, ":", self.name, ":", s)
+            print(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + " :" +
+                  l.name + ":" + self.name + ":" + s, file=self.f)
         else:
-            print(str(datetime.datetime.now()) + ":" + l.name + ":" + self.name + ":" + s, file=self.f)
+            print(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + " :" +
+                  l.name + ":" + self.name + ":" + s)
 
     def log(self, s):
         """

@@ -55,8 +55,8 @@ class Snapshot(TwsTool):
         self.account = {}
         self.df = pd.DataFrame()
 
-        p_from = int(config["price.from"])
-        p_to = int(config["price.to"])
+        p_from = float(config["price.from"])
+        p_to = float(config["price.to"])
         p_step = float(config["price.step"])
 
         self.strikes = np.array(range(0, int(round((p_to - p_from) / p_step)))) * p_step + p_from
