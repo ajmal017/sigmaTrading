@@ -31,7 +31,7 @@ def list_instruments(tbl: str) -> list:
     return res
 
 
-def get_instrument(inst: str, tbl: str) -> Contract:
+def get_instrument(inst: str, tbl: str) -> (Contract, dict):
     """
     Retrieves an instrument metadata from Dynamo DB
     :param inst: symbol string
@@ -51,14 +51,16 @@ def get_instrument(inst: str, tbl: str) -> Contract:
     c.currency = r["currency"]
     c.exchange = r["exchange"]
     c.tradingClass = r["class"]
+    c.multiplier = r["mult"]
 
-    return c
+    return c, {"mon_step": r["mon_step"], "strike_step": r["strike_step"]}
 
 
-def put_instrument(inst: Contract, tbl: str):
+def put_instrument(inst: Contract, add: dict, tbl: str):
     """
     Inserts inserts instrument to Dynamo DB
     :param inst:
+    :param add: additional data
     :param tbl:
     :return:
     """
@@ -66,11 +68,32 @@ def put_instrument(inst: Contract, tbl: str):
                "type": inst.secType,
                "exchange": inst.exchange,
                "currency": inst.currency,
-               "class": inst.tradingClass
+               "class": inst.tradingClass,
+               "mult": inst.multiplier
                }
 
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1',
                               endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
     table = dynamodb.Table(tbl)
-    response = table.put_item(my_inst)
+    my_inst.update(add)
+    response = table.put_item(Item=my_inst)
     print(response)
+
+
+if __name__ == "__main__":
+    print("Inserting instrument")
+
+    cnt = Contract()
+    cnt.symbol = "CL"
+    cnt.currency = "USD"
+    cnt.secType = "FOP"
+    cnt.exchange = "NYMEX"
+    cnt.multiplier = 1000
+    cnt.tradingClass = "LO"
+
+    add_d = {"mon_step": 1,
+             "strike_step": "0.5"
+             }
+
+    put_instrument(cnt, add_d, "instData")
+

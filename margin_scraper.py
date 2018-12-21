@@ -18,6 +18,7 @@ from dateutil.relativedelta import relativedelta
 import boto3
 from tws.tws import TwsTool
 import configparser
+from utils import instrument
 
 
 class MarginCalc(TwsTool):
@@ -37,11 +38,14 @@ class MarginCalc(TwsTool):
         self.config.read(config)
         self.opt = self.config["margin.scraper"]
 
+        (self.cont, add_d) = instrument.get_instrument(self.opt["symbol"], "instData")
+
         # Lists for keeping the margin data
         self.chain = []
         self.ul_chain = []
 
-        self.strikes = np.array(range(0, 80)) / 2 + 40
+        self.strikes = np.array(range(0, int(round(40.0 / float(add_d["strike_step"])))) *
+                                float(add_d["strike_step"])) + 40.0
 
         # Generate list of expiry months
         self.months = []
@@ -49,17 +53,10 @@ class MarginCalc(TwsTool):
             tmp = datetime.today() + relativedelta(months=+i)
             self.months.append(tmp.strftime("%Y%m"))
 
-        self.cont = Contract()
-        self.cont.symbol = self.opt["symbol"]
-        self.cont.exchange = self.opt["exchange"]
-        self.cont.currency = self.opt["currency"]
-        self.cont.secType = self.opt["sectype"]
-        self.cont.tradingClass = self.opt["trading.class"]
-
         self.ul = Contract()
-        self.ul.symbol = self.opt["symbol"]
-        self.ul.exchange = self.opt["exchange"]
-        self.ul.currency = self.opt["currency"]
+        self.ul.symbol = self.cont.symbol
+        self.ul.exchange = self.cont.exchange
+        self.ul.currency = self.cont.currency
         self.ul.secType = self.opt["sectype.ul"]
 
     def connect_tws(self):

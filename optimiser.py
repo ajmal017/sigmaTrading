@@ -275,18 +275,22 @@ class Optimiser(PortfolioStrategy):
         """
         self.logger.log("OPTIMISATION RESULTS")
         # Greeks
-        self.logger.log("--------Greeks--------")
-        self.logger.log("Greek\t\tNew\t\tOld")
+        self.logger.log("-------------- Greeks --------------")
+        self.logger.log("Greek\t\tNew\tOld")
+        self.logger.log("------------------------------------")
         for i, r in df["total_greeks"].iterrows():
             self.logger.log(r["s_greeks"] + "\t" +
-                            str(r["new"]) + "\t\t" +
-                            str(r["old"]))
+                            "{:9.4f}".format(r["new"]) + "\t" +
+                            "{:9.4f}".format(r["old"]))
         # Trades
-        self.logger.log("--------Trades--------")
+        self.logger.log("---------------------- Trades ---------------------")
+        self.logger.log("Instrument\t\t\t\tNew   Old")
+        self.logger.log("---------------------------------------------------")
         for i, r in df["trades"].iterrows():
-            self.logger.log(r["Financial Instrument"] + "\t\t" +
+            self.logger.log("{: <35}".format(r["Financial Instrument"]) + "\t" +
                             r["side"] + "\t" +
                             str(r["q"]))
+        self.logger.log("---------------------------------------------------")
 
     def add_trades_to_df(self, res: dict):
         """
@@ -354,7 +358,7 @@ class Optimiser(PortfolioStrategy):
         #  Data frame headers for data are different in R and Python!
         response = table.put_item(Item=x)
 
-        self.logger.log(str(response))
+        self.logger.verbose(str(response))
 
     def export_trades_csv(self, fn: str):
         """
@@ -399,7 +403,7 @@ class Optimiser(PortfolioStrategy):
         :return:
         """
         self.logger.log("Getting market data from snapshot")
-        snap = snapshot.Snapshot(config=self.opt)
+        snap = snapshot.Snapshot(config=self.opt, log_level=self.loglevel)
         snap.connect(self.opt["host"],
                      int(self.opt["port"]),
                      int(self.opt["id"]) + 1)

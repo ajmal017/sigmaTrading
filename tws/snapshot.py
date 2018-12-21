@@ -12,6 +12,7 @@ from tws.tws import TwsTool
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from tws import tools
+from utils import logger
 import pandas as pd
 import numpy as np
 import time
@@ -42,11 +43,11 @@ class Snapshot(TwsTool):
     """
     Class implements option chain snapshot data request and retrieval logic from TWS
     """
-    def __init__(self, config=None):
+    def __init__(self, config=None, log_level=logger.LogLevel.normal):
         """
         Standard constructor for the class
         """
-        super().__init__(name="Snapshot Scraper")
+        super().__init__(name="Snapshot Scraper", log_level=log_level)
 
         self.config = config
 

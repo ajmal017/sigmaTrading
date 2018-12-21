@@ -64,7 +64,12 @@ class TwsTool(TwsWrapper, TwsClient):
         :param error_string:
         :return:
         """
-        self.logger.error(str(error_code) + ":" + error_string)
+        if error_code == 2104 or error_code == 2106:
+            # These two error codes are normal market data connection messages
+            # They are not really errors at all
+            self.logger.verbose(str(error_code) + ":" + error_string)
+        else:
+            self.logger.error(str(error_code) + ":" + error_string)
 
     def connect(self, host: str, port: int, con_id):
         """
