@@ -56,6 +56,41 @@ class TwsTool(TwsWrapper, TwsClient):
         self.logger.verbose("Next ID received: " + str(order_id))
         self.nextId = int(order_id)
 
+    def orderStatus(self, order_id: OrderId, status: str, filled: float,
+                    remaining: float, avg_fill_price: float, perm_id: int,
+                    parent_id: int, last_fill_price: float, client_id: int,
+                    why_held: str, mkt_cap_price: float):
+        """
+        Order status callback
+        :param order_id:
+        :param status:
+        :param filled:
+        :param remaining:
+        :param avg_fill_price:
+        :param perm_id:
+        :param parent_id:
+        :param last_fill_price:
+        :param client_id:
+        :param why_held:
+        :param mkt_cap_price:
+        :return:
+        """
+        self.logger.verbose("Order " + str(order_id) + " status " + status)
+
+    def openOrder(self, order_id: OrderId, contract: Contract, order: Order,
+                  order_state: OrderState):
+        """
+        Open order callback
+        :param order_id:
+        :param contract:
+        :param order:
+        :param order_state:
+        :return:
+        """
+        self.logger.verbose("Order " + str(order_id) + " " +
+                            order.action + " " + str(order.totalQuantity) +
+                            " open for " + contract.symbol)
+
     def error(self, req_id: TickerId, error_code: int, error_string: str):
         """
         Error printing override

@@ -158,6 +158,7 @@ class Optimiser(PortfolioStrategy):
                         range(1, len(unis) + 1))
 
         # So now lets create the scalars
+        data.create_scalar(self.db, "v_direction", "Algorithm direction short or long vol.", self.opt["direction"])
         data.create_scalar(self.db, "v_multiplier", "Instrument multiplier", self.opt["mult"])
         data.create_scalar(self.db, "v_max_delta", "Maximum delta allowed", self.opt["max.delta"])
         data.create_scalar(self.db, "v_max_gamma", "Maximum gamma allowed", self.opt["max.gamma"])
@@ -440,8 +441,8 @@ class Optimiser(PortfolioStrategy):
         o_id = t.nextId
         for i, r in df_tmp.iterrows():
             self.logger.log(r["Financial Instrument"])
-            c.strike = r["Strike"]
-            c.right = r["Side"]
+            c.strike = "{:g}".format(r["Strike"])
+            c.right = "CALL" if r["Side"] == "c" else "PUT"
             c.lastTradeDateOrContractMonth = r["Contract Month"]
 
             tws_order = Order()
@@ -449,12 +450,26 @@ class Optimiser(PortfolioStrategy):
             tws_order.orderType = "LMT"
             tws_order.action = "BUY" if int(r["Trade"]) > 0 else "SELL"
             tws_order.totalQuantity = np.abs(int(r["Trade"]))
-            tws_order.lmtPrice = float(r["Mid"])
+            tws_order.lmtPrice = float(round(r["Mid"] * 2) / 2)
 
             t.placeOrder(o_id, c, tws_order)
-            o_id += 1
+            o_id = o_id + 1
+            import time
+            time.sleep(0.5)
 
         t.disconnect()
+
+    def close_fut(self, df: dict):
+        """
+        Detects if any FUT positions are present, perhaps due to assignments.
+        If detected, add closing of these positions to trades.
+        :param df: data dict from optimiser
+        :return:
+        """
+        # TODO: Here we need to add detection of FUT positions from assigned optionsma
+        #  These positions need to be closed and added to both CSV and XML exports
+        self.logger.log("FUT position detection and closing currently not implemented")
+        return df
 
 
 if __name__ == "__main__":
@@ -506,9 +521,7 @@ if __name__ == "__main__":
         parser.exit(1)
 
     o.opt_summary(d)
-
-    # TODO: Here we need to add detection of FUT positions from assigned options
-    #  These positions need to be closed and added to both CSV and XML exports
+    d = o.close_fut(d)
 
     # Outputs
     if args.db:

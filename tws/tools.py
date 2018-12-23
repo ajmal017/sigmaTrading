@@ -91,7 +91,7 @@ def export_portfolio_xml(data: pd.DataFrame, fn: str, trades=False, loglevel: Lo
     p = SubElement(x, "Portfolio")
 
     for i, r in tmp.iterrows():
-        pos = SubElement(p, "Position", {"conid": str(r["conid"]),
+        pos = SubElement(p, "Position", {"conid": str(int(round(r["conid"]))),
                                          "avgPrice": str(r["Avg Price"]),
                                          "label": str(r["Financial Instrument"])
                                          })

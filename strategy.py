@@ -77,7 +77,7 @@ class PortfolioStrategy:
             dtg = max(d["dtg"])
             self.logger.log("Latest timestamp in market data table is " + str(dtg))
 
-        response = table.query(KeyConditionExpression=Key('dtg').eq(dtg))
+        response = table.query(KeyConditionExpression=Key('dtg').eq(int(dtg)))
         response = response["Items"][0]
         self.df = pd.DataFrame(json.loads(response["data"]), columns=response["columns"], index=response["index"])
         self.data_date = datetime.datetime.strptime(str(dtg), "%y%m%d%H%M%S")
