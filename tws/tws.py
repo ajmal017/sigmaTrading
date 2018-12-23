@@ -13,11 +13,32 @@ from threading import Thread
 import time
 
 
+class TwsException(Exception):
+    """
+    Dummy own exception implementation
+    """
+    pass
+
+
 class TwsClient(EClient):
     """
     Extension of EClient class
     """
-    pass
+    def connect(self, host, port, client_id):
+        """
+        Connection override
+        :param host:
+        :param port:
+        :param client_id:
+        :return:
+        """
+        c = 0
+        super().connect(host, port, client_id)
+        while not self.isConnected():
+            time.sleep(0.1)
+            c = c + 1
+            if c >= 10:
+                raise TwsException
 
 
 class TwsWrapper(EWrapper):

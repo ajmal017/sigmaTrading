@@ -21,6 +21,11 @@ from ibapi.order import Order
 from ibapi.contract import Contract
 import argparse
 import os
+import sys
+
+
+class OptException(Exception):
+    pass
 
 
 class Optimiser(PortfolioStrategy):
@@ -56,6 +61,19 @@ class Optimiser(PortfolioStrategy):
                                 debug=gams_debug_level,
                                 working_directory="./tmp/")
         self.db = self.ws.add_database()
+
+    def get_opt(self, op: str):
+        """
+        Checks if the option exists, if it does, returns it,
+        otherwise show an error message and raise exception
+        :param op: The configuration option string
+        :return:
+        """
+        if op not in self.opt:
+            self.logger.error("The option " + op + " does not exist in configuration!")
+            raise OptException
+        else:
+            return self.opt[op]
 
     def create_gdx(self):
         """
@@ -128,8 +146,13 @@ class Optimiser(PortfolioStrategy):
         # Calculate asset prices for given percent up and down. Right now lets set it at 3
         #  3% is rather common to be useful for risk management. Actually that level should be
         #  calculated backwards from VaR or something.
-        price_up = self.df["Underlying Price"] * (1 + float(self.opt["risk.pct"]))
-        price_down = self.df["Underlying Price"] * (1 - float(self.opt["risk.pct"]))
+        try:
+            price_up = self.df["Underlying Price"] * (1 + float(self.get_opt("risk.pct")))
+            price_down = self.df["Underlying Price"] * (1 - float(self.get_opt("risk.pct")))
+        except OptException:
+            self.logger.error("Errors in configuration file, quitting")
+            sys.exit(1)
+
         self.df["Price Up"] = greeks.val(price_up, self.df["Strike"], 0.01, 0, self.df["Vol"],
                                          self.df["Days"], self.df["Side"]) - greeks.val(self.df["Underlying Price"],
                                                                                         self.df["Strike"], 0.01, 0,
@@ -158,25 +181,34 @@ class Optimiser(PortfolioStrategy):
                         range(1, len(unis) + 1))
 
         # So now lets create the scalars
-        data.create_scalar(self.db, "v_direction", "Algorithm direction short or long vol.", self.opt["direction"])
-        data.create_scalar(self.db, "v_multiplier", "Instrument multiplier", self.opt["mult"])
-        data.create_scalar(self.db, "v_max_delta", "Maximum delta allowed", self.opt["max.delta"])
-        data.create_scalar(self.db, "v_max_gamma", "Maximum gamma allowed", self.opt["max.gamma"])
-        data.create_scalar(self.db, "v_min_theta", "Minimum theta allowed", self.opt["min.theta"])
-        data.create_scalar(self.db, "v_max_vega", "Maximum vega allowed", self.opt["max.vega"])
-        data.create_scalar(self.db, "v_max_speed", "Maximum speed allowed", self.opt["max.speed"])
-        data.create_scalar(self.db, "v_max_pos", "Maximum position allowed", self.opt["max.pos"])
-        data.create_scalar(self.db, "v_max_pos_tot", "Maximum number of contracts", self.opt["max.pos.tot"])
-        data.create_scalar(self.db, "v_alpha", "Relative importance of theta in obj function", self.opt["alpha"])
-        data.create_scalar(self.db, "v_trans_cost", "Transaction cost for one contract", self.opt["trans.cost"])
-        data.create_scalar(self.db, "v_max_margin", "Maximum margin allowed", self.opt["max.margin"])
-        data.create_scalar(self.db, "v_max_spread", "Maximum bid ask spread allowed", self.opt["max.spread"])
-        data.create_scalar(self.db, "v_min_days", "Minimum days to expiry allowed", self.opt["min.days"])
-        data.create_scalar(self.db, "v_max_trades", "Maximum rebalancing trades allowed", self.opt["max.trades"])
-        data.create_scalar(self.db, "v_max_pos_mon", "Maximum monthly open positions allowed", self.opt["max.pos.mon"])
-        data.create_scalar(self.db, "v_max_risk", "Maximum absolute up and down risk", self.opt["max.risk"])
-        data.create_scalar(self.db, "v_min_price", "Minimum option price permitted", self.opt["min.price"])
-        data.create_scalar(self.db, "v_max_price", "Maximum option price permitted", self.opt["max.price"])
+        try:
+            data.create_scalar(self.db, "v_direction", "Algorithm direction short or long vol.",
+                               self.get_opt("direction"))
+            data.create_scalar(self.db, "v_multiplier", "Instrument multiplier", self.get_opt("mult"))
+            data.create_scalar(self.db, "v_max_delta", "Maximum delta allowed", self.get_opt("max.delta"))
+            data.create_scalar(self.db, "v_max_gamma", "Maximum gamma allowed", self.get_opt("max.gamma"))
+            data.create_scalar(self.db, "v_min_theta", "Minimum theta allowed", self.get_opt("min.theta"))
+            data.create_scalar(self.db, "v_max_vega", "Maximum vega allowed", self.get_opt("max.vega"))
+            data.create_scalar(self.db, "v_max_speed", "Maximum speed allowed", self.get_opt("max.speed"))
+            data.create_scalar(self.db, "v_max_pos", "Maximum position allowed", self.get_opt("max.pos"))
+            data.create_scalar(self.db, "v_max_pos_tot", "Maximum number of contracts", self.get_opt("max.pos.tot"))
+            data.create_scalar(self.db, "v_alpha", "Relative importance of theta in obj function",
+                               self.get_opt("alpha"))
+            data.create_scalar(self.db, "v_trans_cost", "Transaction cost for one contract",
+                               self.get_opt("trans.cost"))
+            data.create_scalar(self.db, "v_max_margin", "Maximum margin allowed", self.get_opt("max.margin"))
+            data.create_scalar(self.db, "v_max_spread", "Maximum bid ask spread allowed", self.get_opt("max.spread"))
+            data.create_scalar(self.db, "v_min_days", "Minimum days to expiry allowed", self.get_opt("min.days"))
+            data.create_scalar(self.db, "v_max_trades", "Maximum rebalancing trades allowed",
+                               self.get_opt("max.trades"))
+            data.create_scalar(self.db, "v_max_pos_mon", "Maximum monthly open positions allowed",
+                               self.get_opt("max.pos.mon"))
+            data.create_scalar(self.db, "v_max_risk", "Maximum absolute up and down risk", self.get_opt("max.risk"))
+            data.create_scalar(self.db, "v_min_price", "Minimum option price permitted", self.get_opt("min.price"))
+            data.create_scalar(self.db, "v_max_price", "Maximum option price permitted", self.get_opt("max.price"))
+        except OptException:
+            self.logger.error("Errors in configuration, quitting")
+            sys.exit(1)
 
         # Parameter now the multi-dimensional parameters
         data.create_parameter(self.db, "p_y", "Existing position data",
@@ -304,7 +336,7 @@ class Optimiser(PortfolioStrategy):
         x = res["trades"]
         if len(x.columns) == 0:
             self.logger.error("No results from optimiser. Infeasible solution?")
-            return
+            raise OptException
 
         x.columns = ["Financial Instrument", "side", "q"]
         x = x.pivot(index="Financial Instrument", columns="side", values="q").fillna(0)
@@ -314,7 +346,7 @@ class Optimiser(PortfolioStrategy):
 
         if self.df.shape[0] == 0:
             self.logger.error("No trades from optimiser, no reason to continue")
-            return 1
+            raise OptException
 
         # Some final calculations on traded quantities
         # What if there are only buys or sells?
@@ -514,7 +546,12 @@ if __name__ == "__main__":
     o.create_gdx()
     o.run_gams()
     d = o.import_gdx()
-    status = o.add_trades_to_df(d)
+
+    try:
+        status = o.add_trades_to_df(d)
+    except OptException:
+        status = 1
+        parser.exit(1)
 
     # No solver results, possible infeasible solution or no trades?
     if len(d["trades"]) == 0 or status == 1:
