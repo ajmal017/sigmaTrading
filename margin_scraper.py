@@ -11,7 +11,6 @@ from ibapi.contract import Contract, ContractDetails
 from ibapi.wrapper import TickType, TickAttrib
 from ibapi.order_state import OrderState
 import pandas as pd
-import numpy as np
 import time
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -38,18 +37,19 @@ class MarginCalc(TwsTool):
         self.config.read(config)
         self.opt = self.config["margin.scraper"]
 
-        (self.cont, add_d) = instrument.get_instrument(self.opt["symbol"], "instData")
+        d = instrument.get_instrument(self.opt["symbol"], "instData")
+        self.cont = d["cont"]
+        add_d = d["add_d"]
 
         # Lists for keeping the margin data
         self.chain = []
         self.ul_chain = []
-
-        self.strikes = np.array(range(0, int(round(40.0 / float(add_d["strike_step"])))) *
-                                float(add_d["strike_step"])) + 40.0
+        self.strikes = instrument.make_strike_chain(self.opt["price.from"], self.opt["price.to"], add_d["strike_step"])
 
         # Generate list of expiry months
+        mon_beg = int(self.opt["rel.start.month"])
         self.months = []
-        for i in range(1, int(self.opt["months"])+1):
+        for i in range(int(mon_beg), int(self.opt["months"])+1):
             tmp = datetime.today() + relativedelta(months=+i)
             self.months.append(tmp.strftime("%Y%m"))
 

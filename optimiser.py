@@ -14,17 +14,19 @@ from gms import data, code
 import boto3
 import json
 import utils
-from utils import logger
+from utils import logger, instrument
 from utils.logger import LogLevel
 from tws import tools, snapshot, tws
 from ibapi.order import Order
-from ibapi.contract import Contract
 import argparse
 import os
 import sys
 
 
 class OptException(Exception):
+    """
+    Own dummy exception
+    """
     pass
 
 
@@ -75,10 +77,11 @@ class Optimiser(PortfolioStrategy):
         else:
             return self.opt[op]
 
-    def create_gdx(self):
+    def create_gdx(self, ignore_existing=False):
         """
         Composes dataset for optimisation and formats it as GDX
         Two options - whether we get it from a CSV or from DynamoDB
+        :param: ignore_existing: whether  we ignore existing positions
         :return:
         """
         self.logger.log("Preparing optimiser input")
@@ -91,6 +94,10 @@ class Optimiser(PortfolioStrategy):
         self.df = self.df[pd.notnull(self.df['Gamma'])]
         self.df = self.df[pd.notnull(self.df['Theta'])]
         self.df = self.df[pd.notnull(self.df['Vega'])]
+
+        # If fresh portfolio, set positions to 0
+        if ignore_existing:
+            self.df["Position"] = 0
 
         # Add sides
         self.df['Financial Instrument'] = self.df['Financial Instrument'].astype(str)
@@ -335,7 +342,7 @@ class Optimiser(PortfolioStrategy):
 
         x = res["trades"]
         if len(x.columns) == 0:
-            self.logger.error("No results from optimiser. Infeasible solution?")
+            self.logger.error("No results from optimiser. Infeasible solution or no trades necessary?")
             raise OptException
 
         x.columns = ["Financial Instrument", "side", "q"]
@@ -444,7 +451,7 @@ class Optimiser(PortfolioStrategy):
         snap.wait_to_finish()
         self.df = snap.prepare_df()
         if export_dynamo:
-            snap.export_dynamo("mktData")
+            snap.export_dynamo(self.config["data"]["mkt.table"])
         snap.disconnect()
 
     def basket_order(self, live=False):
@@ -464,11 +471,8 @@ class Optimiser(PortfolioStrategy):
         # Filter out correct rows
         df_tmp = self.df[self.df["Trade"] != 0]
 
-        c = Contract()
-        c.symbol = self.opt["symbol"]
-        c.currency = self.opt["currency"]
-        c.secType = self.opt["sectype"]
-        c.exchange = self.opt["exchange"]
+        d_tmp = instrument.get_instrument(self.opt["symbol"], "instData")
+        c = d_tmp["cont"]
 
         o_id = t.nextId
         for i, r in df_tmp.iterrows():
@@ -518,6 +522,8 @@ if __name__ == "__main__":
     parser.add_argument("--csv", action="store", help="Export basket as TWS compatible CSV")
     parser.add_argument("--dtg", action="store", help="DTG for Dynamo DB market snapshot retrieval.")
     parser.add_argument("--live", action="store_true", help="If set, send live orders, save otherwise", default=False)
+    parser.add_argument("--ignore_existing", action="store_true",
+                        help="Ignore existing positions in dataset", default=False)
 
     args = parser.parse_args()
 
@@ -543,7 +549,7 @@ if __name__ == "__main__":
     else:
         o.get_mkt_data_csv(args.i)
 
-    o.create_gdx()
+    o.create_gdx(args.ignore_existing)
     o.run_gams()
     d = o.import_gdx()
 

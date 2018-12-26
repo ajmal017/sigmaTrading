@@ -8,7 +8,7 @@ Date: 20. December 2018
 """
 from ibapi.contract import Contract
 import boto3
-from boto3.dynamodb.conditions import Key
+import numpy as np
 
 
 def list_instruments(tbl: str) -> list:
@@ -38,12 +38,12 @@ def get_instrument(inst: str, tbl: str) -> (Contract, dict):
     :param tbl: Dynamo DB name
     :return:
     """
-    dynamodb = boto3.resource('dynamodb', region_name='us-east-1',
-                              endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
-    table = dynamodb.Table(tbl)
-    response = table.query(KeyConditionExression=Key("symbol").eq(inst))
+    db = boto3.resource('dynamodb', region_name='us-east-1',
+                        endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
+    table = db.Table(tbl)
+    response = table.get_item(Key={"symbol": inst})
 
-    r = response["Items"][0]
+    r = response["Item"]
 
     c = Contract()
     c.symbol = r["symbol"]
@@ -53,7 +53,7 @@ def get_instrument(inst: str, tbl: str) -> (Contract, dict):
     c.tradingClass = r["class"]
     c.multiplier = r["mult"]
 
-    return c, {"mon_step": r["mon_step"], "strike_step": r["strike_step"]}
+    return {"cont": c, "add_d": {"mon_step": r["mon_step"], "strike_step": r["strike_step"]}}
 
 
 def put_instrument(inst: Contract, add: dict, tbl: str):
@@ -80,6 +80,20 @@ def put_instrument(inst: Contract, add: dict, tbl: str):
     print(response)
 
 
+def make_strike_chain(beg: float, end: float, step: float):
+    """
+    Generates list of strikes for option chain
+    :param beg:
+    :param end:
+    :param step:
+    :return:
+    """
+    x = ((float(end) - float(beg)) / float(step))
+    r = list(np.array(range(0, int(round(x)))) * float(step) + float(beg))
+    r = ["{:g}".format(item) for item in r]
+    return r
+
+
 if __name__ == "__main__":
     print("Inserting instrument")
 
@@ -96,4 +110,5 @@ if __name__ == "__main__":
              }
 
     put_instrument(cnt, add_d, "instData")
+    get_instrument("CL", "instData")
 

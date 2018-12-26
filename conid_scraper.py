@@ -7,11 +7,12 @@ Date: 15. December 2018
 from tws.tws import TwsTool
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from ibapi.contract import Contract, ContractDetails
-import numpy as np
+from ibapi.contract import ContractDetails
 import time
 import locale
 import boto3
+from utils import instrument
+import configparser
 
 
 class IdScraper(TwsTool):
@@ -21,22 +22,27 @@ class IdScraper(TwsTool):
     def __init__(self, name):
         super().__init__(name)
 
-        start_strike = 40
-        end_strike = 100
-        self.strikes = np.array(range(0, (end_strike - start_strike) * 2)) / 2 + start_strike
+        self.config = configparser.ConfigParser()
+        self.config.read("config.cf")
+        self.opt = self.config["conid.scraper"]
+
+        start_strike = self.opt["price.from"]
+        end_strike = self.opt["price.to"]
+        symbol = self.opt["symbol"]
+
+        d = instrument.get_instrument(symbol, "instData")
+        self.c = d["cont"]
+        add_d = d["add_d"]
+
+        self.strikes = instrument.make_strike_chain(start_strike, end_strike, add_d["strike_step"])
         self.months = []
         self.data = []
 
-        for ind in range(1, 9):
+        m1 = int(self.opt["rel.start.month"])
+        m2 = int(self.opt["months"])
+        for ind in range(m1, m1 + m2):
             tmp = datetime.today() + relativedelta(months=+ind)
             self.months.append(tmp.strftime("%Y%m"))
-
-        self.c = Contract()
-        self.c.symbol = "CL"
-        self.c.currency = "USD"
-        self.c.secType = "FOP"
-        self.c.exchange = "NYMEX"
-        self.c.tradingClass = "LO"
 
     def req_data(self):
         """
@@ -61,7 +67,7 @@ class IdScraper(TwsTool):
                                       "currency": self.c.currency,
                                       "expiry": self.c.lastTradeDateOrContractMonth,
                                       "side": self.c.right,
-                                      "strike": '{:g}'.format(self.c.strike),
+                                      "strike": self.c.strike,
                                       "conid": 0})
                     self.reqContractDetails(o, contract=self.c)
                     time.sleep(1/40)
