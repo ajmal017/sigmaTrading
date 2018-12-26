@@ -34,6 +34,7 @@ class TwsClient(EClient):
         """
         c = 0
         super().connect(host, port, client_id)
+        time.sleep(2)
         while not self.isConnected():
             time.sleep(0.1)
             c = c + 1

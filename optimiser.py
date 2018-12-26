@@ -316,7 +316,7 @@ class Optimiser(PortfolioStrategy):
         self.logger.log("OPTIMISATION RESULTS")
         # Greeks
         self.logger.log("-------------- Greeks --------------")
-        self.logger.log("Greek\t\tNew\tOld")
+        self.logger.log("Greek\t      New\t\tOld")
         self.logger.log("------------------------------------")
         for i, r in df["total_greeks"].iterrows():
             self.logger.log(r["s_greeks"] + "\t" +
@@ -324,7 +324,7 @@ class Optimiser(PortfolioStrategy):
                             "{:9.4f}".format(r["old"]))
         # Trades
         self.logger.log("---------------------- Trades ---------------------")
-        self.logger.log("Instrument\t\t\t\tNew   Old")
+        self.logger.log("Instrument\t\t\t\tActn  Qty")
         self.logger.log("---------------------------------------------------")
         for i, r in df["trades"].iterrows():
             self.logger.log("{: <35}".format(r["Financial Instrument"]) + "\t" +

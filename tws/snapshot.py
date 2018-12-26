@@ -90,7 +90,7 @@ class Snapshot(TwsTool):
 
         self.logger.log("Creating instruments and requesting data")
         sides = ["c", "p"]
-        o = int(self.nextId)
+        o = int(self.nextId) + 1000
         for m in self.months:
             self.logger.log("Requesting month " + m)
             for i in self.strikes:
@@ -106,9 +106,11 @@ class Snapshot(TwsTool):
                                        "Strike": i,
                                        "Side": j.upper(),
                                        "Expiry": m,
+                                       "Underlying Price": float('nan'),
                                        "Bid": float('nan'),
                                        "Ask": float('nan'),
-                                       "Delta": float('nan')})
+                                       "Delta": float('nan'),
+                                       "Gamma": float('nan')})
                     self.cont.right = j.upper()
                     self.cont.strike = i
                     self.cont.lastTradeDateOrContractMonth = m
@@ -119,7 +121,7 @@ class Snapshot(TwsTool):
                                     mktDataOptions=[])
                     self.reqContractDetails(o, self.cont)
                     o = o + 1
-        self.reqAccountUpdates(True, "DU337774")
+        self.reqAccountUpdates(True, self.config["account"])
 
     def tickPrice(self, req_id: int, tick_type: TickType, price: float,
                   attrib: TickAttrib):
@@ -171,13 +173,16 @@ class Snapshot(TwsTool):
         for i in self.chain:
             if i["id"] == req_id:
                 found = True
+                if und_price is not None:
+                    i["Underlying Price"] = und_price
+                else:
+                    print(i["Financial Instrument"])
                 if tick_type == 13:
                     i["Delta"] = delta
                     i["Gamma"] = gamma
                     i["Theta"] = theta
                     i["Vega"] = vega
                     i["Implied Vol. %"] = "NA" if implied_vol is None else str(implied_vol * 100) + "%"
-                    i["Underlying Price"] = und_price
         if not found:
             self.logger.error("Unknown req id in option computation tick!")
 
