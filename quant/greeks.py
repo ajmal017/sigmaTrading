@@ -6,6 +6,7 @@ Date: 3. December 2018
 """
 from scipy.stats import norm
 import numpy as np
+import pandas as pd
 
 
 def val(s, k, r, q, sigma, t, side: str):
@@ -70,6 +71,67 @@ def phi(x):
     return v
 
 
+# TODO: Implement delta, gamma and theta here
+def delta(s, k, r, q, sigma, t, side: str):
+    """
+    Calculates Black Scholes delta
+    :param s:
+    :param k:
+    :param r:
+    :param q:
+    :param sigma:
+    :param t:
+    :param side: option side
+    :return:
+    """
+    print(s)
+    print(k)
+    print(sigma)
+    print(t)
+    if side == "c":
+        r = np.exp(-q * t) * norm.cdf(d_one(s, k, r, q, sigma, t))
+    else:
+        r = -np.exp(-q * t) * norm.cdf(-d_one(s, k, r, q, sigma, t))
+    return r
+
+
+def gamma(s, k, r, q, sigma, t):
+    """
+    Calculates Black Scholes gamma
+    :param s:
+    :param k:
+    :param r:
+    :param q:
+    :param sigma:
+    :param t:
+    :return:
+    """
+    r = np.exp(-q * t) * (phi(d_one(s, k, r, q, sigma, t))) / (s * sigma * np.sqrt(t))
+    return r
+
+
+def theta(s, k, r, q, sigma, t, side: str):
+    """
+    Calculates Black Scholes theta
+    :param s:
+    :param k:
+    :param r:
+    :param q:
+    :param sigma:
+    :param t:
+    :param side:
+    :return:
+    """
+    c1 = -np.exp(-q * t) * (s * phi(d_one(s, k, r, q, sigma, t)) * sigma) / (2 * np.sqrt(t))
+    c2 = r * k * np.exp(-r * t)
+    c3 = q * s * np.exp(-q * t)
+    if side == "c":
+        r = c1 - c2 * norm.cdf(d_two(s, k, r, q, sigma, t)) + c3 * phi(d_one(s, k, r, q, sigma, t))
+    else:
+        r = c1 + c2 * norm.cdf(-d_two(s, k, r, q, sigma, t)) - c3 * phi(-d_one(s, k, r, q, sigma, t))
+    return r
+
+
 def vega(s, k, r, q, sigma, t):
     """
     Calculates vega (that is d price / d sigma)
@@ -85,17 +147,17 @@ def vega(s, k, r, q, sigma, t):
     return v
 
 
-def speed(gamma, s, d1, sigma, t):
+def speed(g, s, d1, sigma, t):
     """
     Calculates d gamma / d price
-    :param gamma:
+    :param g: gamma
     :param s: spot
     :param d1:
     :param sigma: implied volatility
     :param t: time to expiry
     :return:
     """
-    v = (-(gamma / s) * ((d1 / (sigma * np.sqrt(t))) + 1))
+    v = (-(g / s) * ((d1 / (sigma * np.sqrt(t))) + 1))
     return v
 
 
@@ -113,16 +175,16 @@ def vanna(v, s, d1, sigma, t):
     return v
 
 
-def zomma(gamma, d2, d1, sigma):
+def zomma(g, d2, d1, sigma):
     """
     Calculates d gamma / d sigma
-    :param gamma:
+    :param g:
     :param d2:
     :param d1:
     :param sigma: implied volatility
     :return:
     """
-    v = gamma * (d2 * d1 - 1) / sigma
+    v = g * (d2 * d1 - 1) / sigma
     return v
 
 
@@ -143,3 +205,30 @@ def charm(side, d1, d2, r, q, sigma, t):
     v = q * np.exp(-q * t) * norm.cdf(d1) - v1 if side == "c" else -q * np.exp(-q * t) * norm.cdf(-d1) - v1
     return v
 
+
+def build_curves(df: pd.DataFrame, greeks: list, pos_col: str) -> pd.DataFrame:
+    """
+    Creates futures' curves based on given data
+    :param df: DataFrame with underlying data, need the usual s, k, sigma, t
+    :param greeks:  returns greeks as snapshot and at closest expiry
+    :param pos_col: Position column name
+    :return:
+    """
+    df.tmp = df[df[pos_col] != 0].copy()
+
+    r = np.array(range(-30, 30, 1)) / 100
+    df.out = pd.DataFrame(data=r)
+    for i in greeks:
+        df.out[i] = 0
+
+    for i, row in df.tmp.iterrows():
+        spot = np.float(row["Underlying Price"])
+        if "Delta" in greeks:
+            df.out["Delta"] += delta(spot, (1 + r) * spot,  0.01, 0, row["Vol"], row["Days"], row["Side"])
+        if "Gamma" in greeks:
+            df.out["Gamma"] += gamma(spot, (1 + r) * spot,  0.01, 0, row["Vol"], row["Days"])
+        if "Theta" in greeks:
+            df.out["Theta"] += theta(spot, (1 + r) * spot,  0.01, 0, row["Vol"], row["Days"], row["Side"])
+        if "Vega" in greeks:
+            df.out["Vega"] += vega(spot, (1 + r) * spot,  0.01, 0, row["Vol"], row["Days"])
+    return df.out

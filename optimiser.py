@@ -64,6 +64,8 @@ class Optimiser(PortfolioStrategy):
                                 working_directory="./tmp/")
         self.db = self.ws.add_database()
 
+        self.df_greeks = pd.DataFrame()
+
     def get_opt(self, op: str):
         """
         Checks if the option exists, if it does, returns it,
@@ -302,7 +304,7 @@ class Optimiser(PortfolioStrategy):
         # After parameters, add variables
         x["x"] = data.read_gdx_var(db_out, "x")
         x["z"] = data.read_gdx_var(db_out, "z")
-        self.logger.log("Objective function value " + str(next(iter(x["z"].values()))))
+        self.logger.log("Objective function value " + "{:9.4f}".format(next(iter(x["z"].values()))))
 
         # And we are done
         return x
@@ -316,7 +318,7 @@ class Optimiser(PortfolioStrategy):
         self.logger.log("OPTIMISATION RESULTS")
         # Greeks
         self.logger.log("-------------- Greeks --------------")
-        self.logger.log("Greek\t      New\t\tOld")
+        self.logger.log("Greek\t      New\t      Old")
         self.logger.log("------------------------------------")
         for i, r in df["total_greeks"].iterrows():
             self.logger.log(r["s_greeks"] + "\t" +
@@ -364,6 +366,8 @@ class Optimiser(PortfolioStrategy):
 
         self.df["Trade"] = self.df["buy"] - self.df["sell"]
         self.df["NewPosition"] = self.df["Position"] + self.df["Trade"]
+
+        self.df_greeks = greeks.build_curves(self.df, ["Delta", "Gamma", "Theta", "Vega"], "NewPosition")
         return 0
 
     def export_results_dynamo(self, dt: dict, tbl: str = None):
@@ -376,14 +380,15 @@ class Optimiser(PortfolioStrategy):
         dt["trades"].columns = ["s_names", "s_trade", "val"]
 
         x = {"dtg": self.data_date.strftime("%y%m%d%H%M%S"),
-             # "data": self.df.to_json(orient="split"),
+             "data": self.df.to_json(orient="split"),
              "greeks": dt["total_greeks"].to_json(orient="records"),
              "live": False,
              "margin": dt["total_margin"].to_json(orient="records"),
              "opt": json.dumps(dict(self.opt)),
              "pos": dt["total_pos"].to_json(orient="records"),
              "trades": dt["trades"].to_json(orient="records"),
-             "monGreeks": dt["monthly_greeks"].to_json(orient="records")}
+             "monGreeks": dt["monthly_greeks"].to_json(orient="records"),
+             "greekCurves": self.df_greeks.to_json(orient="records")}
 
         self.logger.log("Exporting optimisation results to Dynamo DB")
 
@@ -393,9 +398,6 @@ class Optimiser(PortfolioStrategy):
             tbl = self.opt["results.table"]
 
         table = db.Table(tbl)
-        # TODO: This Dynamo upload here needs to be tested!
-        #  Position data is somehow weird
-        #  Data frame headers for data are different in R and Python!
         response = table.put_item(Item=x)
 
         self.logger.verbose(str(response))
@@ -460,6 +462,7 @@ class Optimiser(PortfolioStrategy):
         :param live: when True, transmits orders, otherwise just saves
         :return:
         """
+        # TODO: If live, then consider automatic order adjustments
         if live:
             self.logger.log("Composing basket orders for automatic LIVE rebalance")
         else:
@@ -540,6 +543,8 @@ if __name__ == "__main__":
 
     # Now the main code
     o = Optimiser(conf_file, loglevel=log)
+    # TODO: Something that checks whether TWS is connected to the correct account (cf. config file)
+    # TODO: Write a config check code, that verifies the contents of the configuration file before proceeding
 
     # Figure out where to get input data
     if args.tws:

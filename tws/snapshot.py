@@ -54,14 +54,17 @@ class Snapshot(TwsTool):
         self.chain = []
         self.months = []
         self.account = {}
+        self.strikes = []
         self.df = pd.DataFrame()
 
-        p_from = float(config["price.from"])
-        p_to = float(config["price.to"])
-        p_step = float(config["price.step"])
+        self.p_from = float(config["price.from"])
+        self.p_to = float(config["price.to"])
+        self.p_step = float(config["price.step"])
+        self.acct_updates_ongoing = True
 
-        self.strikes = np.array(range(0, int(round((p_to - p_from) / p_step)))) * p_step + p_from
-
+        # TODO: The forward month calculation should be automatic, so for instance it should know when
+        #   in December to go still for Jan contract and when start from Feb. Ie. the calculation on those
+        #   months should be based on real last trading dates that we currently don't have
         m_start = int(config["rel.start.month"])
         m_step = int(config["rel.step.month"])
         for i in range(m_start, int(config["months"])+m_start, m_step):
@@ -89,8 +92,24 @@ class Snapshot(TwsTool):
         """
 
         self.logger.log("Creating instruments and requesting data")
+
+        # This updates portfolio positions, also saves strikes
+        self.acct_updates_ongoing = True
+        self.reqAccountUpdates(True, self.config["account"])
+        # We need to wait for account updates to finish, before we start requesting option chain data.
+        while self.acct_updates_ongoing:
+            time.sleep(0.1)
+        # Now find maximum and minimum strike and update if needed
+        for key, item in self.account.items():
+            self.p_to = max(self.p_to, float(item["strike"]))
+            self.p_from = min(self.p_from, float(item["strike"]))
+
+        self.logger.verbose("Price range min: " + str(self.p_from) + " max: " + str(self.p_to))
+        self.strikes = np.array(range(0, int(round((self.p_to - self.p_from) /
+                                                   self.p_step)))) * self.p_step + self.p_from
+
         sides = ["c", "p"]
-        o = int(self.nextId) + 1000
+        o = int(self.nextId) + 1
         for m in self.months:
             self.logger.log("Requesting month " + m)
             for i in self.strikes:
@@ -121,7 +140,6 @@ class Snapshot(TwsTool):
                                     mktDataOptions=[])
                     self.reqContractDetails(o, self.cont)
                     o = o + 1
-        self.reqAccountUpdates(True, self.config["account"])
 
     def tickPrice(self, req_id: int, tick_type: TickType, price: float,
                   attrib: TickAttrib):
@@ -202,7 +220,19 @@ class Snapshot(TwsTool):
         :param account_name:
         :return:
         """
-        self.account[contract.conId] = {"position": position, "avg price": average_cost}
+        if contract.symbol == self.cont.symbol:
+            self.account[contract.conId] = {"position": position,
+                                            "avg price": average_cost,
+                                            "strike": contract.strike}
+
+    def accountDownloadEnd(self, account_name: str):
+        """
+        End of account data download
+        :param account_name:
+        :return:
+        """
+        self.logger.verbose("All account data for " + account_name + " received.")
+        self.acct_updates_ongoing = False
 
     def wait_to_finish(self):
         """
