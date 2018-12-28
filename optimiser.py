@@ -367,7 +367,8 @@ class Optimiser(PortfolioStrategy):
         self.df["Trade"] = self.df["buy"] - self.df["sell"]
         self.df["NewPosition"] = self.df["Position"] + self.df["Trade"]
 
-        self.df_greeks = greeks.build_curves(self.df, ["Delta", "Gamma", "Theta", "Vega"], "NewPosition")
+        self.df_greeks = greeks.build_curves(self.df, ["Val", "Delta", "Gamma", "Theta", "Vega"], "NewPosition")
+        # print(self.df_greeks)
         return 0
 
     def export_results_dynamo(self, dt: dict, tbl: str = None):
@@ -380,7 +381,9 @@ class Optimiser(PortfolioStrategy):
         dt["trades"].columns = ["s_names", "s_trade", "val"]
 
         x = {"dtg": self.data_date.strftime("%y%m%d%H%M%S"),
-             "data": self.df.to_json(orient="split"),
+             # TODO: Data here exceeds maximum allowed size. Do I need to export it all or just a subset?
+             #   I need prices, greeks, potentially positions
+             #"data": self.df.to_json(orient="split"),
              "greeks": dt["total_greeks"].to_json(orient="records"),
              "live": False,
              "margin": dt["total_margin"].to_json(orient="records"),
@@ -399,8 +402,12 @@ class Optimiser(PortfolioStrategy):
 
         table = db.Table(tbl)
         response = table.put_item(Item=x)
+        is_ok = response["ResponseMetadata"]["HTTPStatusCode"] == 200
 
-        self.logger.verbose(str(response))
+        if is_ok:
+            self.logger.verbose("Export completed successfully")
+        else:
+            self.logger.error("Export failed`")
 
     def export_trades_csv(self, fn: str):
         """
@@ -510,6 +517,26 @@ class Optimiser(PortfolioStrategy):
         self.logger.log("FUT position detection and closing currently not implemented")
         return df
 
+    def plot_greeks(self):
+        """
+        Plot greeks
+        :return:
+        """
+        from bokeh.plotting import figure, show
+        from bokeh.layouts import gridplot
+
+        self.logger.log("Outputting bokeh plots")
+        p1 = figure(title="Delta")
+        p1.line(self.df_greeks["r"], self.df_greeks["Delta"])
+        p2 = figure(title="Gamma")
+        p2.line(self.df_greeks["r"], self.df_greeks["Gamma"])
+        p3 = figure(title="Theta")
+        p3.line(self.df_greeks["r"], self.df_greeks["Theta"])
+        p4 = figure(title="Val")
+        p4.line(self.df_greeks["r"], self.df_greeks["Val"])
+
+        show(gridplot([[p1, p2], [p3, p4]]))
+
 
 if __name__ == "__main__":
     # Process command line options
@@ -525,6 +552,7 @@ if __name__ == "__main__":
     parser.add_argument("--csv", action="store", help="Export basket as TWS compatible CSV")
     parser.add_argument("--dtg", action="store", help="DTG for Dynamo DB market snapshot retrieval.")
     parser.add_argument("--live", action="store_true", help="If set, send live orders, save otherwise", default=False)
+    parser.add_argument("--plot", action="store_true", help="Plot greeks", default=False)
     parser.add_argument("--ignore_existing", action="store_true",
                         help="Ignore existing positions in dataset", default=False)
 
@@ -545,6 +573,9 @@ if __name__ == "__main__":
     o = Optimiser(conf_file, loglevel=log)
     # TODO: Something that checks whether TWS is connected to the correct account (cf. config file)
     # TODO: Write a config check code, that verifies the contents of the configuration file before proceeding
+    # TODO: Write command line options for workflow: first 'opt' to do optimisation and write results to db
+    #       if the run is fine then 'trade' that does either the xml export, csv export or direct TWS trading
+    #       additionally 'snapshot' that just pulls the market snapshot and injects it to Dynamo
 
     # Figure out where to get input data
     if args.tws:
@@ -572,6 +603,8 @@ if __name__ == "__main__":
     d = o.close_fut(d)
 
     # Outputs
+    if args.plot:
+        o.plot_greeks()
     if args.db:
         o.export_results_dynamo(d)
     if args.csv:

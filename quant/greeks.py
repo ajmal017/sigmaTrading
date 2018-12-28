@@ -71,7 +71,6 @@ def phi(x):
     return v
 
 
-# TODO: Implement delta, gamma and theta here
 def delta(s, k, r, q, sigma, t, side: str):
     """
     Calculates Black Scholes delta
@@ -84,14 +83,8 @@ def delta(s, k, r, q, sigma, t, side: str):
     :param side: option side
     :return:
     """
-    print(s)
-    print(k)
-    print(sigma)
-    print(t)
-    if side == "c":
-        r = np.exp(-q * t) * norm.cdf(d_one(s, k, r, q, sigma, t))
-    else:
-        r = -np.exp(-q * t) * norm.cdf(-d_one(s, k, r, q, sigma, t))
+    r = np.where(side == "c", np.exp(-q * t) * norm.cdf(d_one(s, k, r, q, sigma, t)),
+                 -np.exp(-q * t) * norm.cdf(-d_one(s, k, r, q, sigma, t)))
     return r
 
 
@@ -110,7 +103,7 @@ def gamma(s, k, r, q, sigma, t):
     return r
 
 
-def theta(s, k, r, q, sigma, t, side: str):
+def theta(s, k, r, q, sigma, t, side: str, unit="day"):
     """
     Calculates Black Scholes theta
     :param s:
@@ -120,15 +113,16 @@ def theta(s, k, r, q, sigma, t, side: str):
     :param sigma:
     :param t:
     :param side:
+    :param unit: unit of time, default day, year otherwise
     :return:
     """
     c1 = -np.exp(-q * t) * (s * phi(d_one(s, k, r, q, sigma, t)) * sigma) / (2 * np.sqrt(t))
     c2 = r * k * np.exp(-r * t)
     c3 = q * s * np.exp(-q * t)
-    if side == "c":
-        r = c1 - c2 * norm.cdf(d_two(s, k, r, q, sigma, t)) + c3 * phi(d_one(s, k, r, q, sigma, t))
-    else:
-        r = c1 + c2 * norm.cdf(-d_two(s, k, r, q, sigma, t)) - c3 * phi(-d_one(s, k, r, q, sigma, t))
+    r = np.where(side == "c", c1 - c2 * norm.cdf(d_two(s, k, r, q, sigma, t)) + c3 * norm.cdf(d_one(s, k, r, q, sigma, t)),
+                 c1 + c2 * norm.cdf(-d_two(s, k, r, q, sigma, t)) - c3 * norm.cdf(-d_one(s, k, r, q, sigma, t)))
+    if unit == "day":
+        r = r / 365.0
     return r
 
 
@@ -202,7 +196,8 @@ def charm(side, d1, d2, r, q, sigma, t):
     :return:
     """
     v1 = np.exp(-q * t) * phi(d1) * (2 * (r - q) * t - d2 * sigma * np.sqrt(t)) / (2 * t * sigma * np.sqrt(t))
-    v = q * np.exp(-q * t) * norm.cdf(d1) - v1 if side == "c" else -q * np.exp(-q * t) * norm.cdf(-d1) - v1
+    v = np.where(side == "c", q * np.exp(-q * t) * norm.cdf(d1) - v1,
+                 -q * np.exp(-q * t) * norm.cdf(-d1) - v1)
     return v
 
 
@@ -214,21 +209,29 @@ def build_curves(df: pd.DataFrame, greeks: list, pos_col: str) -> pd.DataFrame:
     :param pos_col: Position column name
     :return:
     """
-    df.tmp = df[df[pos_col] != 0].copy()
+    df_tmp = df[df[pos_col] != 0].copy()
 
     r = np.array(range(-30, 30, 1)) / 100
-    df.out = pd.DataFrame(data=r)
+    df_out = pd.DataFrame(data=r)
+    df_out.columns = ["r"]
     for i in greeks:
-        df.out[i] = 0
+        df_out[i] = 0
 
-    for i, row in df.tmp.iterrows():
+    for i, row in df_tmp.iterrows():
         spot = np.float(row["Underlying Price"])
+        p = np.float(row[pos_col])
+        s = row["Vol"]
+        k = row["Strike"]
+        if "Val" in greeks:
+            df_out["Val"] = df_out["Val"].add(p * val((1 + r) * spot, k,  0.01, 0, s, row["Days"], row["Side"]))
         if "Delta" in greeks:
-            df.out["Delta"] += delta(spot, (1 + r) * spot,  0.01, 0, row["Vol"], row["Days"], row["Side"])
+            df_out["Delta"] = df_out["Delta"].add(p * delta((1 + r) * spot, k,  0.01, 0, s, row["Days"], row["Side"]))
         if "Gamma" in greeks:
-            df.out["Gamma"] += gamma(spot, (1 + r) * spot,  0.01, 0, row["Vol"], row["Days"])
+            df_out["Gamma"] += p * gamma((1 + r) * spot, k,  0.01, 0, s, row["Days"])
         if "Theta" in greeks:
-            df.out["Theta"] += theta(spot, (1 + r) * spot,  0.01, 0, row["Vol"], row["Days"], row["Side"])
+            df_out["Theta"] += p * theta((1 + r) * spot, k,  0.01, 0, s, row["Days"], row["Side"])
         if "Vega" in greeks:
-            df.out["Vega"] += vega(spot, (1 + r) * spot,  0.01, 0, row["Vol"], row["Days"])
-    return df.out
+            df_out["Vega"] += p * vega((1 + r) * spot, k,  0.01, 0, s, row["Days"])
+
+    print(df_out)
+    return df_out

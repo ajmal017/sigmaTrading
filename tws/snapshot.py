@@ -308,7 +308,11 @@ class Snapshot(TwsTool):
 
         response = table.put_item(Item=data)
 
-        return response
+        is_ok = response["ResponseMetadata"]["HTTPStatusCode"] == 200
+        if is_ok:
+            self.logger.verbose("Data export to DynamoDB successful")
+        else:
+            self.logger.error("Failed to export data to DynamoDB")
 
 
 if __name__ == "__main__":
