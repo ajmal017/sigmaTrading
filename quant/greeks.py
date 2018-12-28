@@ -217,6 +217,8 @@ def build_curves(df: pd.DataFrame, greeks: list, pos_col: str) -> pd.DataFrame:
     for i in greeks:
         df_out[i] = 0
 
+    # TODO: Add here value at closest expiry
+    #   Also add values at plus one day
     for i, row in df_tmp.iterrows():
         spot = np.float(row["Underlying Price"])
         p = np.float(row[pos_col])
@@ -233,5 +235,4 @@ def build_curves(df: pd.DataFrame, greeks: list, pos_col: str) -> pd.DataFrame:
         if "Vega" in greeks:
             df_out["Vega"] += p * vega((1 + r) * spot, k,  0.01, 0, s, row["Days"])
 
-    print(df_out)
     return df_out
