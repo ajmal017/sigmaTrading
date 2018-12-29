@@ -65,6 +65,7 @@ class Optimiser(PortfolioStrategy):
         self.db = self.ws.add_database()
 
         self.df_greeks = pd.DataFrame()
+        self.df_greeks_before = pd.DataFrame()
 
     def get_opt(self, op: str):
         """
@@ -370,7 +371,10 @@ class Optimiser(PortfolioStrategy):
         self.df_greeks = greeks.build_curves(self.df,
                                              ["Val", "Val_p1", "Val_exp", "Delta",
                                               "Gamma", "Theta", "Vega"], "NewPosition")
+        self.df_greeks_before = greeks.build_curves(self.df, ["Val", "Val_p1", "Val_exp", "Delta",
+                                                              "Gamma", "Theta", "Vega"], "Position")
         self.df_greeks = self.df_greeks.multiply(float(self.get_opt("mult")))
+        self.df_greeks_before = self.df_greeks_before.multiply(float(self.get_opt("mult")))
         return 0
 
     def export_results_dynamo(self, dt: dict, tbl: str = None):
@@ -382,18 +386,20 @@ class Optimiser(PortfolioStrategy):
         """
         dt["trades"].columns = ["s_names", "s_trade", "val"]
 
+        cols = ["Financial Instrument", "Bid", "Mid", "Ask", "Underlying Price", "Position", "NewPosition",
+                "Strike", "Side", "Days", "Vol", "Delta", "Gamma", "Theta", "Vega", "Contract Month"]
+        df_tmp = self.df[cols].copy()
+
         x = {"dtg": self.data_date.strftime("%y%m%d%H%M%S"),
-             # TODO: Data here exceeds maximum allowed size. Do I need to export it all or just a subset?
-             #   I need prices, greeks, potentially positions
-             #"data": self.df.to_json(orient="split"),
+             "data": df_tmp.to_json(orient="split"),
              "greeks": dt["total_greeks"].to_json(orient="records"),
              "live": False,
              "margin": dt["total_margin"].to_json(orient="records"),
              "opt": json.dumps(dict(self.opt)),
              "pos": dt["total_pos"].to_json(orient="records"),
              "trades": dt["trades"].to_json(orient="records"),
-             "monGreeks": dt["monthly_greeks"].to_json(orient="records"),
-             "greekCurves": self.df_greeks.to_json(orient="records")}
+             "monGreeks": dt["monthly_greeks"].to_json(orient="records")
+             }
 
         self.logger.log("Exporting optimisation results to Dynamo DB")
 
@@ -529,15 +535,19 @@ class Optimiser(PortfolioStrategy):
 
         self.logger.log("Outputting bokeh plots")
         p1 = figure(title="Delta", width=250, height=250)
-        p1.line(self.df_greeks.index, self.df_greeks["Delta"])
+        p1.line(self.df_greeks.index, self.df_greeks["Delta"], line_color="red", legend="Optimal")
+        p1.line(self.df_greeks.index, self.df_greeks_before["Delta"], line_color="black", legend="Current")
         p2 = figure(title="Gamma", width=250, height=250)
-        p2.line(self.df_greeks.index, self.df_greeks["Gamma"])
+        p2.line(self.df_greeks.index, self.df_greeks["Gamma"], line_color="red", legend="Optimal")
+        p2.line(self.df_greeks.index, self.df_greeks_before["Gamma"], line_color="black", legend="Current")
         p3 = figure(title="Theta", width=250, height=250)
-        p3.line(self.df_greeks.index, self.df_greeks["Theta"])
+        p3.line(self.df_greeks.index, self.df_greeks["Theta"], line_color="red", legend="Optimal")
+        p3.line(self.df_greeks.index, self.df_greeks_before["Theta"], line_color="black", legend="Current`")
         p4 = figure(title="Val", width=750, height=250)
-        p4.line(self.df_greeks.index, self.df_greeks["Val"])
-        p4.line(self.df_greeks.index, self.df_greeks["Val_p1"], line_color="red")
-        p4.line(self.df_greeks.index, self.df_greeks["Val_exp"], line_color="red", line_dash="4 4")
+        p4.line(self.df_greeks.index, self.df_greeks["Val"], line_color="red", legend="Optimal")
+        p4.line(self.df_greeks.index, self.df_greeks["Val_p1"], line_color="blue", legend="T+1 day")
+        p4.line(self.df_greeks.index, self.df_greeks["Val_exp"], line_color="blue", line_dash="4 4", legend="Expiry")
+        p4.line(self.df_greeks.index, self.df_greeks["Val"], line_color="black", legend="Current")
 
         show(gridplot([[p4], [p1, p2, p3]]))
 
