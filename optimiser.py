@@ -367,8 +367,10 @@ class Optimiser(PortfolioStrategy):
         self.df["Trade"] = self.df["buy"] - self.df["sell"]
         self.df["NewPosition"] = self.df["Position"] + self.df["Trade"]
 
-        self.df_greeks = greeks.build_curves(self.df, ["Val", "Delta", "Gamma", "Theta", "Vega"], "NewPosition")
-        # print(self.df_greeks)
+        self.df_greeks = greeks.build_curves(self.df,
+                                             ["Val", "Val_p1", "Val_exp", "Delta",
+                                              "Gamma", "Theta", "Vega"], "NewPosition")
+        self.df_greeks = self.df_greeks.multiply(float(self.get_opt("mult")))
         return 0
 
     def export_results_dynamo(self, dt: dict, tbl: str = None):
@@ -526,16 +528,18 @@ class Optimiser(PortfolioStrategy):
         from bokeh.layouts import gridplot
 
         self.logger.log("Outputting bokeh plots")
-        p1 = figure(title="Delta")
-        p1.line(self.df_greeks["r"], self.df_greeks["Delta"])
-        p2 = figure(title="Gamma")
-        p2.line(self.df_greeks["r"], self.df_greeks["Gamma"])
-        p3 = figure(title="Theta")
-        p3.line(self.df_greeks["r"], self.df_greeks["Theta"])
-        p4 = figure(title="Val")
-        p4.line(self.df_greeks["r"], self.df_greeks["Val"])
+        p1 = figure(title="Delta", width=250, height=250)
+        p1.line(self.df_greeks.index, self.df_greeks["Delta"])
+        p2 = figure(title="Gamma", width=250, height=250)
+        p2.line(self.df_greeks.index, self.df_greeks["Gamma"])
+        p3 = figure(title="Theta", width=250, height=250)
+        p3.line(self.df_greeks.index, self.df_greeks["Theta"])
+        p4 = figure(title="Val", width=750, height=250)
+        p4.line(self.df_greeks.index, self.df_greeks["Val"])
+        p4.line(self.df_greeks.index, self.df_greeks["Val_p1"], line_color="red")
+        p4.line(self.df_greeks.index, self.df_greeks["Val_exp"], line_color="red", line_dash="4 4")
 
-        show(gridplot([[p1, p2], [p3, p4]]))
+        show(gridplot([[p4], [p1, p2, p3]]))
 
 
 if __name__ == "__main__":

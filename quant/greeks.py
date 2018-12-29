@@ -119,7 +119,8 @@ def theta(s, k, r, q, sigma, t, side: str, unit="day"):
     c1 = -np.exp(-q * t) * (s * phi(d_one(s, k, r, q, sigma, t)) * sigma) / (2 * np.sqrt(t))
     c2 = r * k * np.exp(-r * t)
     c3 = q * s * np.exp(-q * t)
-    r = np.where(side == "c", c1 - c2 * norm.cdf(d_two(s, k, r, q, sigma, t)) + c3 * norm.cdf(d_one(s, k, r, q, sigma, t)),
+    r = np.where(side == "c", c1 - c2 * norm.cdf(d_two(s, k, r, q, sigma, t)) +
+                 c3 * norm.cdf(d_one(s, k, r, q, sigma, t)),
                  c1 + c2 * norm.cdf(-d_two(s, k, r, q, sigma, t)) - c3 * norm.cdf(-d_one(s, k, r, q, sigma, t)))
     if unit == "day":
         r = r / 365.0
@@ -211,28 +212,41 @@ def build_curves(df: pd.DataFrame, greeks: list, pos_col: str) -> pd.DataFrame:
     """
     df_tmp = df[df[pos_col] != 0].copy()
 
-    r = np.array(range(-30, 30, 1)) / 100
-    df_out = pd.DataFrame(data=r)
+    # TODO: Make these ranges adjustable
+    r = np.array(range(-100, 100, 1)) / 1000
+    df_out = pd.DataFrame(r)
     df_out.columns = ["r"]
+    df_out.index = r
     for i in greeks:
         df_out[i] = 0
 
-    # TODO: Add here value at closest expiry
-    #   Also add values at plus one day
+    t_min = min(df_tmp["Days"])
+
     for i, row in df_tmp.iterrows():
         spot = np.float(row["Underlying Price"])
         p = np.float(row[pos_col])
         s = row["Vol"]
         k = row["Strike"]
+        t = row["Days"]
+        px = row["Mid"]
+        t1 = t - 1/365
+        t1 = np.where(t1 == 0, 0.00001, t1)
+        t_e = t - t_min
+        t_e = np.where(t_e == 0, 0.00001, t_e)
         if "Val" in greeks:
-            df_out["Val"] = df_out["Val"].add(p * val((1 + r) * spot, k,  0.01, 0, s, row["Days"], row["Side"]))
+            df_out["Val"] = df_out["Val"].add(p * val((1 + r) * spot, k,  0.01, 0, s, t, row["Side"]) - p*px)
+        if "Val_p1" in greeks:
+            df_out["Val_p1"] = df_out["Val"].add(p * val((1 + r) * spot, k,  0.01, 0, s, t1, row["Side"]) - p*px)
+        if "Val_exp" in greeks:
+            df_out["Val_exp"] = df_out["Val_exp"].add(p * val((1 + r) * spot, k,  0.01, 0, s, t_e, row["Side"]) - p*px)
         if "Delta" in greeks:
-            df_out["Delta"] = df_out["Delta"].add(p * delta((1 + r) * spot, k,  0.01, 0, s, row["Days"], row["Side"]))
+            df_out["Delta"] = df_out["Delta"].add(p * delta((1 + r) * spot, k,  0.01, 0, s, t, row["Side"]))
         if "Gamma" in greeks:
-            df_out["Gamma"] += p * gamma((1 + r) * spot, k,  0.01, 0, s, row["Days"])
+            df_out["Gamma"] += p * gamma((1 + r) * spot, k,  0.01, 0, s, t)
         if "Theta" in greeks:
-            df_out["Theta"] += p * theta((1 + r) * spot, k,  0.01, 0, s, row["Days"], row["Side"])
+            df_out["Theta"] += p * theta((1 + r) * spot, k,  0.01, 0, s, t, row["Side"])
         if "Vega" in greeks:
-            df_out["Vega"] += p * vega((1 + r) * spot, k,  0.01, 0, s, row["Days"])
+            df_out["Vega"] += p * vega((1 + r) * spot, k,  0.01, 0, s, t)
 
+    df_out["pct"] = r
     return df_out
