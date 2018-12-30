@@ -81,7 +81,8 @@
         <div class="container-fluid">
             <h1>Sigma Portfolio Balancing</h1>
 
-            <h2>Optimisation runs</h2><div id="div_runs">
+            <h2>Optimisation runs</h2>
+            <div id="div_runs">
             <table id='run_table'>
                 <thead>
                 <tr>
@@ -94,41 +95,39 @@
                 </tr>
                 </thead>
             </table>
-        </div>
+            </div>
 
-            <table>
-                <tr>
-                    <td valign="top"><h2>Parameters</h2><div id="div_parameters"></div></td>
-                    <td valign="top"><h2>Greeks</h2>
-                        <table>
-                            <tr>
-                                <td>
-                                    <div id="div_greeks"></div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>
-                                    <div id="mon_greeks"></div>
-                                </td>
-                            </tr>
-                        </table>
-                    </td>
-                    <td valign="top"><h2>Trades</h2><div id="div_trades"></div></td>
-                </tr>
-            </table>
+            <div class="row">
+                <div class="col-lg-3">
+                   <h2>Parameters</h2>
+                    <div id="div_parameters"></div>
+                </div>
+                <div class="col-lg-2">
+                    <h2>Total Greeks</h2>
+                    <div id="div_greeks"></div>
+                </div>
+                <div class="col-lg-3">
+                    <h2>Monthly Greeks</h2>
+                    <div id="mon_greeks"></div>
+                </div>
+                <div class="col-lg-4">
+                    <h2>Trades</h2>
+                    <div id="div_trades"></div>
+                </div>
+            </div>
 
             <h2>Portfolio Greeks</h2>
             <div class="row">
-                <div class="col-sm-4">
-                    <canvas id="val_plot" height="200" width="200"></canvas>
+                <div class="col-lg-12">
+                    <canvas id="val_plot" height="200" width="600"></canvas>
                 </div>
-                <div class="col-sm-4">
+                <div class="col-lg-4">
                     <canvas id="delta_plot" height="200" width="200"></canvas>
                 </div>
-                <div class="col-sm-4">
+                <div class="col-lg-4">
                     <canvas id="gamma_plot" height="200" width="200"></canvas>
                 </div>
-                <div class="col-sm-4">
+                <div class="col-lg-4">
                     <canvas id="theta_plot" height="200" width="200"></canvas>
                 </div>
             </div>
