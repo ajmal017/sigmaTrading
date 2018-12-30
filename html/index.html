@@ -2,68 +2,64 @@
 <html lang="en">
 
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <meta name="description" content="Portfolio rebalancing history front end">
-  <meta name="author" content="Peeter Meos, Sigma Research OÜ">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="Portfolio rebalancing history front end">
+    <meta name="author" content="Peeter Meos, Sigma Research OÜ">
 
-  <!-- Bootstrap styling + some of my stuff added -->
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
-  <script src="https://code.jquery.com/jquery-3.3.1.js"></script>
-  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
-  <script src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
-  <!--
-  <link href="style.css" rel="stylesheet">
-  -->
+    <!-- Bootstrap styling + some of my stuff added -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.3.1.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
+    <!--
+    <link href="style.css" rel="stylesheet">
+    -->
+    <!-- Charting by chart.js -->
+    <script src="https://www.chartjs.org/dist/2.7.3/Chart.bundle.js"></script>
 
-  <title>Portfolio balancing overview</title>
+    <title>Portfolio balancing overview</title>
 
-  <!-- Plotly for greeks plotting -->
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-  <!-- Code for my greeks calculation -->
-  <script src="greeks.js"></script>
+    <script>
+        var apiKey = 'rTHh0diaI09X8WbnK8i282vcvtyhVg3G593rz46j';
+        $(document).ready(function(){
+            // List of runs
+            $.ajaxSetup({
+                headers: { 'x-api-key': apiKey }
+            });
 
-
-  <script>
-    var apiKey = 'rTHh0diaI09X8WbnK8i282vcvtyhVg3G593rz46j';
-    $(document).ready(function(){
-        // List of runs
-        $.ajaxSetup({
-          headers: { 'x-api-key': apiKey }
+            var json = (function () {
+                var json = null;
+                $.ajax({
+                    headers: {
+                        'x-api-key': apiKey
+                    },
+                    'async': false,
+                    'global': false,
+                    'url': "https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/runs",
+                    'dataType': "json",
+                    'success': function (data) {
+                        json = data;
+                    }
+                });
+                result = json;
+                $.each(result, function(i, field){
+                    var j = jQuery.parseJSON(field.opt);
+                    $("#run_table").append("<tr><td>" +field.date+
+                        "</td><td><div class='runid' onclick='getRun(" + field.dtg+ ")'>"+field.dtg +
+                        "</div></td><td>" + j.symbol +
+                        "</td><td>" + j.account +
+                        "</td><td><div id='live"+field.dtg+"' onclick='updateStatus("+field.dtg+ ")'>" + field.live +
+                        "</td><td><div onclick='deleteRun("+field.dtg+ ")'>"+"Delete</div></td></tr>");
+                });
+            })();
         });
-
-        var json = (function () {
-          var json = null;
-          $.ajax({
-            headers: {
-              'x-api-key': apiKey
-            },
-            'async': false,
-            'global': false,
-            'url': "https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/runs",
-            'dataType': "json",
-            'success': function (data) {
-              json = data;
-            }
-        });
-        result = json.Items;
-        $.each(result, function(i, field){
-              var j = jQuery.parseJSON(field.opt)
-              $("#run_table").append("<tr><td>" +field.date+
-                "</td><td><div class='runid' onclick='getRun(" + field.dtg+ ")'>"+field.dtg + 
-                "</div></td><td>" + j.symbol +
-                "</td><td>" + j.account +
-                "</td><td><div id='live"+field.dtg+"' onclick='updateStatus("+field.dtg+ ")'>" + field.live +
-                "</td><td><div onclick='deleteRun("+field.dtg+ ")'>"+"Delete</div></td></tr>");
-        });
-      })();
-    });
-  </script>
+    </script>
 
 </head>
 
 <body>
-  <div id="wrapper">
+<div id="wrapper">
 
     <!-- Sidebar
     <div id="sidebar-wrapper">
@@ -83,200 +79,321 @@
     <!-- Page Content -->
     <div id="page-content-wrapper">
         <div class="container-fluid">
-              <h1>Sigma Portfolio Balancing</h1>
+            <h1>Sigma Portfolio Balancing</h1>
 
-              <h2>Optimisation runs</h2><div id="div_runs">
-                <table id='run_table'>
-                  <thead>
-                    <tr>
-                      <th style="width:150px">Date</th>
-                      <th style="width:120px">Run</th>
-                      <th style="width:60px">Symbol</th>
-                      <th style="width:80px">Account</th>
-                      <th style="width:50px">Live</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                </table>
-              </div>
-              
-              <table>
+            <h2>Optimisation runs</h2><div id="div_runs">
+            <table id='run_table'>
+                <thead>
                 <tr>
-                  <td valign="top"><h2>Parameters</h2><div id="div_parameters"></div></td>
-                  <td valign="top"><h2>Greeks</h2>
-                    <table>
-                      <tr>
-                        <td>
-                          <div id="div_greeks"></div>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>
-                          <div id="mon_greeks"></div>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                  <td valign="top"><h2>Trades</h2><div id="div_trades"></div></td>
+                    <th style="width:150px">Date</th>
+                    <th style="width:120px">Run</th>
+                    <th style="width:60px">Symbol</th>
+                    <th style="width:80px">Account</th>
+                    <th style="width:50px">Live</th>
+                    <th></th>
                 </tr>
-              </table>
+                </thead>
+            </table>
+        </div>
 
-              <h2>Portfolio positions</h2>
-              <div id="div_data">
+            <table>
+                <tr>
+                    <td valign="top"><h2>Parameters</h2><div id="div_parameters"></div></td>
+                    <td valign="top"><h2>Greeks</h2>
+                        <table>
+                            <tr>
+                                <td>
+                                    <div id="div_greeks"></div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <div id="mon_greeks"></div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                    <td valign="top"><h2>Trades</h2><div id="div_trades"></div></td>
+                </tr>
+            </table>
+
+            <h2>Portfolio Greeks</h2>
+            <div class="row">
+                <div class="col-sm-4">
+                    <canvas id="val_plot" height="200" width="200"></canvas>
+                </div>
+                <div class="col-sm-4">
+                    <canvas id="delta_plot" height="200" width="200"></canvas>
+                </div>
+                <div class="col-sm-4">
+                    <canvas id="gamma_plot" height="200" width="200"></canvas>
+                </div>
+                <div class="col-sm-4">
+                    <canvas id="theta_plot" height="200" width="200"></canvas>
+                </div>
+            </div>
+
+            <h2>Portfolio positions</h2>
+            <div id="div_data">
                 <table id="table_data" class="display"></table>
-              </div>
+            </div>
         </div>
     </div>
     <!-- /#page-content-wrapper -->
 
-  </div>
-  <!-- /#wrapper -->
+</div>
+<!-- /#wrapper -->
 
-  <!-- Menu Toggle Script -->
-  <script>
-  $("#menu-toggle").click(function(e) {
-      e.preventDefault();
-      $("#wrapper").toggleClass("toggled");
-  });
-  </script>  
- 
-  <script type="text/javascript">
+<!-- Menu Toggle Script -->
+<script>
+    $("#menu-toggle").click(function(e) {
+        e.preventDefault();
+        $("#wrapper").toggleClass("toggled");
+    });
+</script>
+
+<script type="text/javascript">
     // Delete run, currently does not work
     function deleteRun(id) {
-      var url = 'https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/details/' + id;
-      var ask = confirm("Confirm delete run id " + id);
-      if(ask){
-        $.ajax({
-          headers: {
-            'x-api-key': apiKey
-          },
-          'async': false,
-          'global': false,
-          'url': url,
-          'type': 'DELETE',
-          'dataType': "json",
-          success: function(result) {
-            console.log(result);
-          }
-        });
-      }
+        var url = 'https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/details/' + id;
+        var ask = confirm("Confirm delete run id " + id);
+        if(ask){
+            $.ajax({
+                headers: {
+                    'x-api-key': apiKey
+                },
+                'async': false,
+                'global': false,
+                'url': url,
+                'type': 'DELETE',
+                'dataType': "json",
+                success: function(result) {
+                    console.log(result);
+                }
+            });
+        }
     }
 
     // Update run status between live and test
     function updateStatus(id) {
-      var url = 'https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/details/' + id;
-      $.ajax({
-        headers: {
-          'x-api-key': apiKey
-        },
-        'async': false,
-        'global': false,
-        'url': url,
-        'type': 'POST',
-        'dataType': "json",
-        success: function(result) {
-          $("#live"+id).html(""+result.Attributes.live)
-        }
-      });
+        var url = 'https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/details/' + id;
+        $.ajax({
+            headers: {
+                'x-api-key': apiKey
+            },
+            'async': false,
+            'global': false,
+            'url': url,
+            'type': 'POST',
+            'dataType': "json",
+            success: function(result) {
+                $("#live"+id).html(""+result.Attributes.live)
+            }
+        });
     }
 
     function getRun(id){
-      // Empty the fields
-      $("#div_parameters").html("")
-      $("#div_greeks").html("")
-      $("#mon_greeks").html("")
-      $("#div_trades").html("")
-      $("#table_data").html("")
+        var url = 'https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/details/' + id;
 
-      var url = 'https://ci78cr2qw5.execute-api.us-east-1.amazonaws.com/production/details/' + id;
+        // Get the detailed run
+        var json = (function () {
+            var json = null;
+            $.ajax({
+                headers: {
+                    'x-api-key': apiKey
+                },
+                'async': false,
+                'global': false,
+                'url': url,
+                'dataType': "json",
+                'success': function (data) {
+                    json = data;
+                }
+            });
+            return json.Items;
+        })();
 
-      // Get the detailed run
-      var json = (function () {
-        var json = null;
-        $.ajax({
-          headers: {
-            'x-api-key': apiKey
-          },
-          'async': false,
-          'global': false,
-          'url': url,
-          'dataType': "json",
-          'success': function (data) {
-            json = data;
-          }
+        // Parameters
+        with($("#div_parameters")){
+            html("");
+            append("<table>");
+            append("<tr><th>Parameter</th><th>Value</th></tr>");
+            //append(json[0].opt);
+            $.each(jQuery.parseJSON(json[0].opt), function(index, element) {
+                append("<tr><td>"+index+"</td><td>"+element+"</td></tr>")
+            });
+            append("</table>");
+        }
+
+        // Greeks
+        with($("#div_greeks")){
+            html("");
+            append("<table>");
+            append("<tr><th>Greek</th><th>New</th><th>Old</th></tr>");
+            $.each(jQuery.parseJSON(json[0].greeks), function(index, element) {
+                var s = "";
+                s = "<tr><td>"+element.s_greeks+"</td><td>";
+                if ('new' in element) s = s + element.new;
+                s = s + "</td><td>";
+                if ('old' in element) s = s + element.old;
+                append(s)
+            });
+            append("</table>")
+
+        }
+
+        // Monthly greeks
+        if ('monGreeks' in json[0]) {
+            with($("#mon_greeks")){
+                html("");
+                append("<table>");
+                append("<thead><tr><th>Greek</th><th>Month</th><th>New</th><th>Old</th></tr></thead>");
+                $.each(jQuery.parseJSON(json[0].monGreeks), function(index, element) {
+                    var s = "";
+                    s = s + "<tr><td>"+element.s_greeks+"</td>";
+                    s = s + "<td>"+element.s_month+"</td><td>";
+                    s = 'new' in element ? s + element.new : s;
+                    s = s + "</td><td>";
+                    s = 'old' in element ? s + element.old : s;
+                    s = s + "</td>";
+                    append(s)
+                });
+                append("</table>");
+            }
+        }
+
+        // Trades
+        with($("#div_trades")){
+            html("");
+            append("<table>");
+            append("<tr><th>Instrument</th><th>Trade</th><th>Quantity</th></tr>");
+            $.each(jQuery.parseJSON(json[0].trades), function(index, element) {
+                append("<tr><td>"+element.s_names+"</td><td>"+element.s_trade+"</td><td>"+element.val+"</td></tr>")
+            });
+            append("</table>");
+        }
+
+        //Greeks curves
+        var g_index = [];
+        var g_val = [];
+        var g_val_p1 = [];
+        var g_val_exp = [];
+        var g_delta = [];
+        var g_gamma = [];
+        var g_theta = [];
+
+        var g_array = JSON.parse(json[0].greek_curve);
+        for(var j=0; j < g_array.length; j++) {
+            g_index.push(g_array[j].r);
+            g_val.push(g_array[j].Val);
+            g_val.push(g_array[j].Val_p1);
+            g_val_exp.push(g_array[j].Val_exp);
+            g_delta.push(g_array[j].Delta);
+            g_gamma.push(g_array[j].Gamma);
+            g_theta.push(g_array[j].Theta);
+        }
+
+        var ctx_val = document.getElementById('val_plot');
+        var ctx_delta = document.getElementById('delta_plot');
+        var ctx_gamma = document.getElementById('gamma_plot');
+        var ctx_theta = document.getElementById('theta_plot');
+        var valChart = new Chart(ctx_val, {
+            type: 'line',
+            data: {
+                labels: g_index,
+                datasets: [{
+                    label: "Present Value",
+                    pointRadius: 0,
+                    borderColor: "#ff6384",
+                    data: g_val,
+                    fill: false
+                }, {
+                    label: "Value at expiry",
+                    pointRadius: 0,
+                    borderColor: "#36a2eb",
+                    data: g_val_exp,
+                    fill: false
+                }, {
+                    label: "Value at T+1",
+                    pointRadius: 0,
+                    borderColor: "#ff661a",
+                    data: g_val_p1,
+                    fill: false
+                }]
+            }
         });
-        return json.Items;
-      })();
-
-      // Parameters
-      $("#div_parameters").append("<table>")
-      $("#div_parameters").append("<tr><th>Parameter</th><th>Value</th></tr>")
-      $.each(jQuery.parseJSON(json[0].opt), function(index, element) {
-        $("#div_parameters").append("<tr><td>"+index+"</td><td>"+element+"</td></tr>")
-      });
-      $("#div_parameters").append("</table>")
-
-      // Greeks
-      $("#div_greeks").append("<table>")
-      $("#div_greeks").append("<tr><th>Greek</th><th>New</th><th>Old</th></tr>")
-      $.each(jQuery.parseJSON(json[0].greeks), function(index, element) {
-        var s = ""
-        s = "<tr><td>"+element.s_greeks+"</td><td>"
-        if ('new' in element) s = s + element.new
-        s = s + "</td><td>"  
-        if ('old' in element) s = s + element.old
-        $("#div_greeks").append(s)
-      });
-      $("#div_greeks").append("</table>")
-
-      // Monthly greeks
-      if ('monGreeks' in json[0]) {
-        $("#mon_greeks").append("<table>")
-        $("#mon_greeks").append("<thead><tr><th>Greek</th><th>Month</th><th>New</th><th>Old</th></tr></thead>")
-        $.each(jQuery.parseJSON(json[0].monGreeks), function(index, element) {
-          var s = ""
-          s = "<tr><td>"+element.s_greeks+"</td>"
-          s = s + "<td>"+element.s_month+"</td><td>"
-          s = 'new' in element ? s + element.new : s
-          s = s + "</td><td>" 
-          s = 'old' in element ? s + element.old : s
-          s = s + "</td>"
-          $("#mon_greeks").append(s)
+        var deltaChart = new Chart(ctx_delta, {
+            type: 'line',
+            title: "Portfolio Delta",
+            data: {
+                labels: g_index,
+                datasets: [{
+                    label: "Portfolio Delta",
+                    pointRadius: 0,
+                    borderColor: "#ff6384",
+                    data: g_delta,
+                    fill: false
+                }]
+            }
         });
-        $("#mon_greeks").append("</table>")
-      }
+        var gammaChart = new Chart(ctx_gamma, {
+            type: 'line',
+            title: "Portfolio Gamma",
+            data: {
+                labels: g_index,
+                datasets: [{
+                    label: "Portfolio Gamma",
+                    pointRadius: 0,
+                    borderColor: "#ff6384",
+                    data: g_gamma,
+                    fill: false
+                }]
+            }
+        });
+        var thetaChart = new Chart(ctx_theta, {
+            type: 'line',
+            title: "Portfolio Theta",
+            data: {
+                labels: g_index,
+                datasets: [{
+                    label: "Portfolio Theta",
+                    pointRadius: 0,
+                    borderColor: "#ff6384",
+                    data: g_theta,
+                    fill: false
+                }]
+            }
+        });
 
-      // Trades
-      $("#div_trades").append("<table>")
-      $("#div_trades").append("<tr><th>Instrument</th><th>Trade</th><th>Quantity</th></tr>")
-      $.each(jQuery.parseJSON(json[0].trades), function(index, element) {
-        $("#div_trades").append("<tr><td>"+element.s_names+"</td><td>"+element.s_trade+"</td><td>"+element.val+"</td></tr>")
-      });
-      $("#div_trades").append("</table>")
+        // Data
+        with($("#table_data")){
+            html("<thead><tr class='data'><th class='data'>Instrument</th><th class='data'>Bid</th>"+
+                "<th class='data'>Ask</th><th class='data'>Mid</th>"+
+                "<th class='data'>Expiry(days)</th><th class='data'>Impl Vol</th><th class='data'>Inst Delta</th>"+
+                "<th class='data'>Inst Gamma</th><th class='data'>Inst Theta</th>"+
+                "<th class='data'>Inst Vega</th><th class='data'>Previous position</th>" +
+                "<th class='data'>New position</th></tr></thead>")
 
-      // Data
-      $("#table_data").append("<thead><tr class='data'><th class='data'>Instrument</th><th class='data'>Bid</th><th class='data'>Ask</th>" +
-        "<th class='data'>Mid</th><th class='data'>Avg Price</th>"+
-        "<th class='data'>Expiry(days)</th><th class='data'>Impl Vol</th><th class='data'>Delta</th><th class='data'>Gamma</th><th class='data'>Theta</th>"+
-        "<th class='data'>Vega</th><th class='data'>Previous position</th><th class='data'>New position</th></tr></thead>")
-      
-      $.each(jQuery.parseJSON(json[0].data), function(index, element) {
-        $("#table_data").append("<tr><td class='data'>"+element["Financial.Instrument"]+
-          "</td><td class='data'>"+element["Bid"]+
-          "</td><td class='data'>"+element["Ask"]+
-          "</td><td class='data'>"+element["Mid"]+
-          "</td><td class='data'>"+element["Avg.Price"]+
-          "</td><td class='data'>"+element["Days.to.Last.Trading.Day"]+
-          "</td><td class='data'>"+element["Implied.Vol..."]+
-          "</td><td class='data'>"+element["Delta"]+
-          "</td><td class='data'>"+element["Gamma"]+
-          "</td><td class='data'>"+element["Theta"]+
-          "</td><td class='data'>"+element["Vega"]+
-          "</td><td class='data'>"+element["Position"]+
-          "</td><td class='data'>"+element["NewPosition"]+
-          "</td></tr>")
-      });
+            $.each(jQuery.parseJSON(json[0].data), function(index, element) {
+                if (Number(element["Position"]) !== 0 || Number(element["NewPosition"]) !== 0) {
+                    append("<tr><td class='data'>" + element["Financial Instrument"] +
+                        "</td><td class='data'>" + element["Bid"] +
+                        "</td><td class='data'>" + element["Ask"] +
+                        "</td><td class='data'>" + element["Mid"] +
+                        "</td><td class='data'>" + Math.round(element["Days"] * 365) +
+                        "</td><td class='data'>" + element["Vol"].toFixed(4) +
+                        "</td><td class='data'>" + element["Delta"].toFixed(4) +
+                        "</td><td class='data'>" + element["Gamma"].toFixed(4) +
+                        "</td><td class='data'>" + element["Theta"].toFixed(4) +
+                        "</td><td class='data'>" + element["Vega"].toFixed(4) +
+                        "</td><td class='data'>" + element["Position"] +
+                        "</td><td class='data'>" + element["NewPosition"] +
+                        "</td></tr>")
+                }
+            });
+
+        }
     }
-  </script>
+</script>
 </body>
 </html>

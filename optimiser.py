@@ -391,11 +391,11 @@ class Optimiser(PortfolioStrategy):
         df_tmp = self.df[cols].copy()
 
         x = {"dtg": self.data_date.strftime("%y%m%d%H%M%S"),
-             "data": df_tmp.to_json(orient="split"),
+             "data": df_tmp.to_json(orient="records"),
              "greeks": dt["total_greeks"].to_json(orient="records"),
              "live": False,
              "margin": dt["total_margin"].to_json(orient="records"),
-             "opt": json.dumps(dict(self.opt)),
+             "opt": str(json.dumps(dict(self.opt))),
              "pos": dt["total_pos"].to_json(orient="records"),
              "trades": dt["trades"].to_json(orient="records"),
              "monGreeks": dt["monthly_greeks"].to_json(orient="records")
