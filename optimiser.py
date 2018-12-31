@@ -276,7 +276,7 @@ class Optimiser(PortfolioStrategy):
         if fn is None:
             fn = "_gams_py_gdb1.gdx"
 
-        self.logger.log("Importing from " + fn)
+        self.logger.verbose("Importing from " + fn)
         db_out = self.ws.add_database_from_gdx(gdx_file_name=fn, database_name="results")
 
         # Initialise output dict, enumerate the results and read them from GDX

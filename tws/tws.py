@@ -121,7 +121,7 @@ class TwsTool(TwsWrapper, TwsClient):
         :param error_string:
         :return:
         """
-        if error_code == 2104 or error_code == 2106:
+        if error_code == 2104 or error_code == 2106 or error_code == 2108:
             # These two error codes are normal market data connection messages
             # They are not really errors at all
             self.logger.verbose(str(error_code) + ":" + error_string)

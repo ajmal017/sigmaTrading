@@ -251,7 +251,7 @@ class Snapshot(TwsTool):
                 if (np.isnan(i["Ask"]) and np.isnan(i["Bid"])) or i["Delta"] == float("nan"):
                     found = False
                     c1 = c1 + 1
-            self.logger.log(str(c1) + " instruments of " + str(len(self.chain)) + " missing")
+            self.logger.verbose(str(c1) + " instruments of " + str(len(self.chain)) + " missing")
             time.sleep(0.5)
             # Break loop when two loops in a row are with same missing rows
             if c_prev == c1:
