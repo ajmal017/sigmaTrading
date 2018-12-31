@@ -244,6 +244,7 @@ def build_curves(df: pd.DataFrame, greeks: list, pos_col: str) -> pd.DataFrame:
     df_tmp = df[df[pos_col] != 0].copy()
 
     # TODO: Make these ranges adjustable
+    # TODO: write the code to work with numpy vectors and return a dict of vectors. Ie. get rid of pandas.
     r = np.array(range(-100, 100, 1)) / 1000
     df_out = pd.DataFrame(r)
     df_out.columns = ["r"]
