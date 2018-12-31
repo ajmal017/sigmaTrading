@@ -590,6 +590,13 @@ if __name__ == "__main__":
     # TODO: Write command line options for workflow: first 'opt' to do optimisation and write results to db
     #       if the run is fine then 'trade' that does either the xml export, csv export or direct TWS trading
     #       additionally 'snapshot' that just pulls the market snapshot and injects it to Dynamo
+    # TODO: General commands: data import / export- grabs a snapshot from wherever and stores it in the database
+    #                             also add plot option here
+    #                         run optimise - does the optimisation run and stores it in the database
+    #                         run list - list runs in the database
+    #                         run view - plots a run in the database
+    #                         run export - exports a run (xml, csv, possibly tws)
+    #                         run full - does the full workflow
 
     # Figure out where to get input data
     if args.tws:
