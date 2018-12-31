@@ -570,6 +570,10 @@ if __name__ == "__main__":
     parser.add_argument("--ignore_existing", action="store_true",
                         help="Ignore existing positions in dataset", default=False)
 
+    parser.add_argument("data", action="store", help="Market data import, export, manipulations")
+    parser.add_argument("run", action="store", help="Optimisation commands")
+    parser.add_argument("results", action="store", help="Subcommands for optimisation results")
+
     args = parser.parse_args()
 
     if args.c is None:
