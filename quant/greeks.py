@@ -202,6 +202,37 @@ def charm(side, d1, d2, r, q, sigma, t):
     return v
 
 
+def norm_cdf_approx(x: float):
+    """
+    Approximation of Normal CDF to avoid the use of scipy
+    :param x:
+    :return:
+    """
+    import math
+
+    ret = 1 / (1 + math.exp(-(0.07056 * math.pow(x, 3) + 1.5976 * x)))
+    return ret
+
+
+def norm_pdf_approx(x: float):
+    """
+    Approximation of Normal PDF to avoid the use of scipy
+    :param x:
+    :return:
+    """
+    import math
+    n = range(1, 5)
+
+    res1 = math.exp(-x*x/2)
+    res2 = 1 / x
+
+    for i in n:
+        res2 += ((math.pow(-1, i) * math.factorial(2*i - 1)) /
+                 (math.pow(2, i - 1) * math.factorial(i - 1)) *
+                 1 / (math.pow(x, (2*i + 1))))
+    return res1 * res2
+
+
 def build_curves(df: pd.DataFrame, greeks: list, pos_col: str) -> pd.DataFrame:
     """
     Creates futures' curves based on given data

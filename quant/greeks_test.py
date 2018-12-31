@@ -84,6 +84,10 @@ class GreekTests(unittest.TestCase):
 
         self.assertEqual(0.35990699, np.round(greeks.vanna(v, s, d1, sigma, t), 8))
 
+    def test_norm_approx(self):
+        self.assertEqual(0.5, np.round(greeks.norm_cdf_approx(0), 8))
+        self.assertEqual(0.97503, np.round(greeks.norm_cdf_approx(1.961), 5))
+
 
 if __name__ == "__main__":
     unittest.main()

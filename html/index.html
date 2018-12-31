@@ -57,7 +57,10 @@
                         "<button type='button' class='btn " + b + " btn-sm'>" +
                         s + "</button>" + "</div>" +
                         "</td><td><div onclick='deleteRun("+field.dtg+ ")'>"+
-                        "<button type='button' class='btn btn-warning btn-sm'>Delete</button></div></td></tr>");
+                        "<button type='button' class='btn btn-warning btn-sm'>Delete</button>" +
+                        "</div></td><td><div>" +
+                        "<button type='button' class='btn btn-info btn-sm' onclick='getRun(" + field.dtg + ")'>Details</button>" +
+                        "</div></td></tr>");
                 });
             })();
         });
