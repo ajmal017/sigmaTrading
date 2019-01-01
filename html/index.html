@@ -53,11 +53,11 @@
                         "</td><td>" + j.symbol +
                         "</td><td>" + j.account +
                         "</td><td><div id='live"+field.dtg+"' onclick='updateStatus("+field.dtg+ ")'>" +
-                        "<button type='button' class='btn " + b + " btn-sm'>" +
-                        s + "</button>" + "</div>" +
-                        "</td><td><div onclick='deleteRun("+field.dtg+ ")'>"+
-                        "<button type='button' class='btn btn-warning btn-sm'>Delete</button>" +
-                        "</div></td><td><div>" +
+                        "<button type='button' class='btn " + b + " btn-sm'>" + s + "</button>" + "</div>" +
+                        "</td>" +
+                        "<td><div class='btn-group btn-group-sm' role='group'>" +
+                        "<button type='button' class='btn btn-warning btn-sm' onclick='deleteRun(" +field.dtg+ ")'>Delete</button>" +
+                        "<button type='button' class='btn btn-info btn-sm'>Parameters</button>" +
                         "<button type='button' class='btn btn-info btn-sm' onclick='getRun(" + field.dtg + ")'>Details</button>" +
                         "</div></td></tr>");
                 });
@@ -227,7 +227,7 @@
                     json = data;
                 }
             });
-            return json.Items;
+            if (json != null) return json.Items;
         })();
 
         // Parameters
@@ -267,7 +267,7 @@
             var monVega = [];
 
             var s = JSON.parse(json[0].monGreeks);
-            for (var j=0; j<s.length; j++){
+            for (j=0; j<s.length; j++){
                 console.log(s[j]);
                 if (s[j].s_greeks === "delta")  monDelta.push(s[j].new);
                 if (s[j].s_greeks === "gamma")  monGamma.push(s[j].new);
@@ -276,7 +276,7 @@
             }
 
             var ctx_mon = document.getElementById('mon_grk_plot');
-            var monChart = new Chart(ctx_mon, {
+            new Chart(ctx_mon, {
                 type: 'horizontalBar',
                 data: {
                     labels: monIndex,
@@ -317,9 +317,8 @@
 
         // Trades
         with($("#div_trades")){
-            html("");
-            append("<table class='table table-sm table-striped'><thead>");
-            append("<tr><th>Instrument</th><th>Trade</th><th>Quantity</th></tr></thead>");
+            html("<table class='table table-sm table-striped'><thead>" +
+                "<tr><th>Instrument</th><th>Trade</th><th>Quantity</th></tr></thead>");
             $.each(jQuery.parseJSON(json[0].trades), function(index, element) {
                 append("<tr><td>"+element.s_names+"</td><td>"+element.s_trade+"</td><td>"+element.val+"</td></tr>")
             });
@@ -329,7 +328,7 @@
         //Greeks curves
         var g_index = [];
         var g_val = [];
-        var g_val_p1 = []
+        var g_val_p1 = [];
         var g_val_exp = [];
         var g_val_b = [];
         var g_delta = [];
@@ -350,7 +349,7 @@
             g_theta.push(g_array[j].Theta);
         }
         g_array = JSON.parse(json[0].greek_curve_before);
-        for(var j=0; j , j < g_array.length; j++) {
+        for(j=0; j , j < g_array.length; j++) {
             g_val_b.push(g_array[j].Val);
             g_delta_b.push(g_array[j].Delta);
             g_gamma_b.push(g_array[j].Gamma);
@@ -362,7 +361,7 @@
         var ctx_delta = document.getElementById('delta_plot');
         var ctx_gamma = document.getElementById('gamma_plot');
         var ctx_theta = document.getElementById('theta_plot');
-        var valChart = new Chart(ctx_val, {
+        new Chart(ctx_val, {
             type: 'line',
             data: {
                 labels: g_index,
@@ -371,30 +370,30 @@
                     pointRadius: 0,
                     borderColor: "#ff6384",
                     data: g_val,
-                    fill: false,
+                    fill: false
                 }, {
                     label: "Value at expiry",
                     pointRadius: 0,
                     borderColor: "#36a2eb",
                     data: g_val_exp,
-                    fill: false,
+                    fill: false
                 }, {
                     label: "Value at T+1",
                     pointRadius: 0,
                     borderColor: "#ff661a",
                     data: g_val_p1,
-                    fill: false,
+                    fill: false
                 }, {
                     label: "Value before",
                     pointRadius: 0,
                     borderColor: "#ff6384",
                     data: g_val_b,
                     borderDash: [5, 5],
-                    fill: false,
+                    fill: false
                 }]
             }
         });
-        var deltaChart = new Chart(ctx_delta, {
+        new Chart(ctx_delta, {
             type: 'line',
             title: "Portfolio Delta",
             data: {
@@ -414,7 +413,7 @@
                 }]
             }
         });
-        var gammaChart = new Chart(ctx_gamma, {
+        new Chart(ctx_gamma, {
             type: 'line',
             title: "Portfolio Gamma",
             data: {
@@ -434,7 +433,7 @@
                 }]
             }
         });
-        var thetaChart = new Chart(ctx_theta, {
+        new Chart(ctx_theta, {
             type: 'line',
             title: "Portfolio Theta",
             data: {
@@ -462,7 +461,7 @@
                 "<th class='data'>Expiry(days)</th><th class='data'>Impl Vol</th><th class='data'>Delta</th>"+
                 "<th class='data'>Gamma</th><th class='data'>Theta</th>"+
                 "<th class='data'>Vega</th><th class='data'>Previous position</th>" +
-                "<th class='data'>New position</th></tr></thead>")
+                "<th class='data'>New position</th></tr></thead>");
 
             $.each(jQuery.parseJSON(json[0].data), function(index, element) {
                 if (Number(element["Position"]) !== 0 || Number(element["NewPosition"]) !== 0) {
@@ -478,7 +477,7 @@
                         "</td><td class='data'>" + element["Vega"].toFixed(4) +
                         "</td><td class='data'>" + element["Position"] +
                         "</td><td class='data'>" + element["NewPosition"] +
-                        "</td></tr>")
+                        "</td></tr>");
                 }
             });
 
