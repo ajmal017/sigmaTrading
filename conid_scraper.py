@@ -135,7 +135,8 @@ class IdScraper(TwsTool):
         with table.batch_writer() as batch:
             for m in self.data:
                 batch.put_item(Item={"instString": m["Financial Instrument"],
-                                     "conid": m["conid"]})
+                                     "conid": m["conid"],
+                                     "expiry": m["contr_month"]})
 
         self.logger.log("Export finished")
 
