@@ -65,6 +65,8 @@ class Snapshot(TwsTool):
         # TODO: The forward month calculation should be automatic, so for instance it should know when
         #   in December to go still for Jan contract and when start from Feb. Ie. the calculation on those
         #   months should be based on real last trading dates that we currently don't have
+        #   Get the conid table contents. Then look up closest expiry date from here?
+
         m_start = int(config["rel.start.month"])
         m_step = int(config["rel.step.month"])
         for i in range(m_start, int(config["months"])+m_start, m_step):
