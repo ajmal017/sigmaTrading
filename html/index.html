@@ -50,8 +50,7 @@
                     var s = field.live === true ? "Live" : "Test";
                     var b = field.live === true ? "btn-success" : "btn-light";
                     $("#run_table").append("<tr><td>" +field.date+
-                        "</td><td><div class='runid' onclick='getRun(" + field.dtg+ ")'>"+field.dtg +
-                        "</div></td><td>" + j.symbol +
+                        "</td><td>" + j.symbol +
                         "</td><td>" + j.account +
                         "</td><td><div id='live"+field.dtg+"' onclick='updateStatus("+field.dtg+ ")'>" +
                         "<button type='button' class='btn " + b + " btn-sm'>" +
@@ -103,7 +102,6 @@
                 <thead>
                 <tr>
                     <th style="width:150px">Date</th>
-                    <th style="width:120px">Run</th>
                     <th style="width:60px">Symbol</th>
                     <th style="width:80px">Account</th>
                     <th style="width:50px">Live</th>
@@ -120,11 +118,11 @@
                 </div>
                 <div class="col-lg-2">
                     <h2>Total Greeks</h2>
-                    <div id="div_greeks"></div>
+                    <canvas id="tot_grk_plot" height="100", width="100"></canvas>
                 </div>
                 <div class="col-lg-3">
                     <h2>Monthly Greeks</h2>
-                    <div id="mon_greeks"></div>
+                    <canvas id="mon_grk_plot" height="150" width="100"></canvas>
                 </div>
                 <div class="col-lg-4">
                     <h2>Trades</h2>
@@ -150,7 +148,7 @@
 
             <h2>Portfolio positions</h2>
             <div id="div_data">
-                <table id="table_data" class="display"></table>
+                <table class="table table-striped table-sm" id="table_data" class="display"></table>
             </div>
         </div>
     </div>
@@ -245,47 +243,83 @@
         }
 
         // Greeks
-        with($("#div_greeks")){
-            html("");
-            append("<table>");
-            append("<tr><th>Greek</th><th>New</th><th>Old</th></tr>");
-            $.each(jQuery.parseJSON(json[0].greeks), function(index, element) {
-                var s = "";
-                s = "<tr><td>"+element.s_greeks+"</td><td>";
-                if ('new' in element) s = s + element.new;
-                s = s + "</td><td>";
-                if ('old' in element) s = s + element.old;
-                append(s)
-            });
-            append("</table>")
+        if ('greeks' in json[0]) {
+            var grIndex = ["Delta", "Gamma", "Theta", "Vega"];
+            var grDelta = [];
+            var grGamma = [];
+            var grTheta = [];
+            var grVega = [];
 
+            var ctx_gr = document.getElementById('tot_grk_plot');
+            var grChart = new Chart(ctx_gr, {
+                type: 'horizontalBar',
+                data: {},
+                options: {}
+            });
         }
 
         // Monthly greeks
         if ('monGreeks' in json[0]) {
-            with($("#mon_greeks")){
-                html("");
-                append("<table>");
-                append("<thead><tr><th>Greek</th><th>Month</th><th>New</th><th>Old</th></tr></thead>");
-                $.each(jQuery.parseJSON(json[0].monGreeks), function(index, element) {
-                    var s = "";
-                    s = s + "<tr><td>"+element.s_greeks+"</td>";
-                    s = s + "<td>"+element.s_month+"</td><td>";
-                    s = 'new' in element ? s + element.new : s;
-                    s = s + "</td><td>";
-                    s = 'old' in element ? s + element.old : s;
-                    s = s + "</td>";
-                    append(s)
-                });
-                append("</table>");
+            var monIndex = [1,2,3,4,5];
+            var monDelta = [];
+            var monGamma = [];
+            var monTheta = [];
+            var monVega = [];
+
+            var s = JSON.parse(json[0].monGreeks);
+            for (var j=0; j<s.length; j++){
+                console.log(s[j]);
+                if (s[j].s_greeks === "delta")  monDelta.push(s[j].new);
+                if (s[j].s_greeks === "gamma")  monGamma.push(s[j].new);
+                if (s[j].s_greeks === "theta")  monTheta.push(s[j].new);
+                if (s[j].s_greeks === "vega")  monVega.push(s[j].new);
             }
+
+            var ctx_mon = document.getElementById('mon_grk_plot');
+            var monChart = new Chart(ctx_mon, {
+                type: 'horizontalBar',
+                data: {
+                    labels: monIndex,
+                    datasets: [{
+                        label: "Delta",
+                        data: monDelta
+                    }, {
+                        label: "Gamma",
+                        data: monGamma
+
+                    }, {
+                        label: "Theta",
+                        data: monTheta
+                    }, {
+                        label: "Vega",
+                        data: monVega
+                    }]
+                },
+                options: {
+                    title: {
+                        text: "Monthly greeks"
+                    },
+                    tooltips: {
+                      mode: "index",
+                      intersect: false
+                    },
+                    scales: {
+                        xAxes: [{
+                            stacked: true
+                        }],
+                        yAxes: [{
+                            stacked: true
+                        }]
+                    }
+                }
+            });
         }
 
         // Trades
         with($("#div_trades")){
             html("");
-            append("<table>");
-            append("<tr><th>Instrument</th><th>Trade</th><th>Quantity</th></tr>");
+            append("<table class='table table-sm table-striped'><thead>");
+            append("<tr><th>Instrument</th><th>Trade</th><th>Quantity</th></tr></thead>");
             $.each(jQuery.parseJSON(json[0].trades), function(index, element) {
                 append("<tr><td>"+element.s_names+"</td><td>"+element.s_trade+"</td><td>"+element.val+"</td></tr>")
             });
@@ -295,7 +329,7 @@
         //Greeks curves
         var g_index = [];
         var g_val = [];
-        var g_val_p1 = [];
+        var g_val_p1 = []
         var g_val_exp = [];
         var g_val_b = [];
         var g_delta = [];
@@ -425,9 +459,9 @@
         with($("#table_data")){
             html("<thead><tr class='data'><th class='data'>Instrument</th><th class='data'>Bid</th>"+
                 "<th class='data'>Ask</th><th class='data'>Mid</th>"+
-                "<th class='data'>Expiry(days)</th><th class='data'>Impl Vol</th><th class='data'>Inst Delta</th>"+
-                "<th class='data'>Inst Gamma</th><th class='data'>Inst Theta</th>"+
-                "<th class='data'>Inst Vega</th><th class='data'>Previous position</th>" +
+                "<th class='data'>Expiry(days)</th><th class='data'>Impl Vol</th><th class='data'>Delta</th>"+
+                "<th class='data'>Gamma</th><th class='data'>Theta</th>"+
+                "<th class='data'>Vega</th><th class='data'>Previous position</th>" +
                 "<th class='data'>New position</th></tr></thead>")
 
             $.each(jQuery.parseJSON(json[0].data), function(index, element) {
