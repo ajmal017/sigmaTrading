@@ -14,9 +14,6 @@
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js"></script>
     <script src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
 
-    <!--
-    <link href="style.css" rel="stylesheet">
-    -->
     <!-- Charting by chart.js -->
     <script src="https://www.chartjs.org/dist/2.7.3/Chart.bundle.js"></script>
 
@@ -50,8 +47,7 @@
                     var s = field.live === true ? "Live" : "Test";
                     var b = field.live === true ? "btn-success" : "btn-light";
                     $("#run_table").append("<tr><td>" +field.date+
-                        "</td><td><div class='runid' onclick='getRun(" + field.dtg+ ")'>"+field.dtg +
-                        "</div></td><td>" + j.symbol +
+                        "</td><td>" + j.symbol +
                         "</td><td>" + j.account +
                         "</td><td><div id='live"+field.dtg+"' onclick='updateStatus("+field.dtg+ ")'>" +
                         "<button type='button' class='btn " + b + " btn-sm'>" +
@@ -103,7 +99,6 @@
                 <thead>
                 <tr>
                     <th style="width:150px">Date</th>
-                    <th style="width:120px">Run</th>
                     <th style="width:60px">Symbol</th>
                     <th style="width:80px">Account</th>
                     <th style="width:50px">Live</th>
@@ -120,11 +115,11 @@
                 </div>
                 <div class="col-lg-2">
                     <h2>Total Greeks</h2>
-                    <div id="div_greeks"></div>
+                    <canvas id="tot_grk_plot" height="100", width="100"></canvas>
                 </div>
                 <div class="col-lg-3">
                     <h2>Monthly Greeks</h2>
-                    <div id="mon_greeks"></div>
+                    <canvas id="mon_grk_plot" height="150" width="100"></canvas>
                 </div>
                 <div class="col-lg-4">
                     <h2>Trades</h2>
@@ -150,7 +145,7 @@
 
             <h2>Portfolio positions</h2>
             <div id="div_data">
-                <table id="table_data" class="display"></table>
+                <table class="table table-striped table-sm" id="table_data" class="display"></table>
             </div>
         </div>
     </div>
@@ -229,7 +224,7 @@
                     json = data;
                 }
             });
-            return json.Items;
+            if (json != null) return json.Items;
         })();
 
         // Parameters
@@ -245,47 +240,82 @@
         }
 
         // Greeks
-        with($("#div_greeks")){
-            html("");
-            append("<table>");
-            append("<tr><th>Greek</th><th>New</th><th>Old</th></tr>");
-            $.each(jQuery.parseJSON(json[0].greeks), function(index, element) {
-                var s = "";
-                s = "<tr><td>"+element.s_greeks+"</td><td>";
-                if ('new' in element) s = s + element.new;
-                s = s + "</td><td>";
-                if ('old' in element) s = s + element.old;
-                append(s)
-            });
-            append("</table>")
+        if ('greeks' in json[0]) {
+            var grIndex = ["Delta", "Gamma", "Theta", "Vega"];
+            var grDelta = [];
+            var grGamma = [];
+            var grTheta = [];
+            var grVega = [];
 
+            var ctx_gr = document.getElementById('tot_grk_plot');
+            var grChart = new Chart(ctx_gr, {
+                type: 'horizontalBar',
+                data: {},
+                options: {}
+            });
         }
 
         // Monthly greeks
         if ('monGreeks' in json[0]) {
-            with($("#mon_greeks")){
-                html("");
-                append("<table>");
-                append("<thead><tr><th>Greek</th><th>Month</th><th>New</th><th>Old</th></tr></thead>");
-                $.each(jQuery.parseJSON(json[0].monGreeks), function(index, element) {
-                    var s = "";
-                    s = s + "<tr><td>"+element.s_greeks+"</td>";
-                    s = s + "<td>"+element.s_month+"</td><td>";
-                    s = 'new' in element ? s + element.new : s;
-                    s = s + "</td><td>";
-                    s = 'old' in element ? s + element.old : s;
-                    s = s + "</td>";
-                    append(s)
-                });
-                append("</table>");
+            var monIndex = [1,2,3,4,5];
+            var monDelta = [];
+            var monGamma = [];
+            var monTheta = [];
+            var monVega = [];
+
+            var s = JSON.parse(json[0].monGreeks);
+            for (j=0; j<s.length; j++){
+                console.log(s[j]);
+                if (s[j].s_greeks === "delta")  monDelta.push(s[j].new);
+                if (s[j].s_greeks === "gamma")  monGamma.push(s[j].new);
+                if (s[j].s_greeks === "theta")  monTheta.push(s[j].new);
+                if (s[j].s_greeks === "vega")  monVega.push(s[j].new);
             }
+
+            var ctx_mon = document.getElementById('mon_grk_plot');
+            new Chart(ctx_mon, {
+                type: 'horizontalBar',
+                data: {
+                    labels: monIndex,
+                    datasets: [{
+                        label: "Delta",
+                        data: monDelta
+                    }, {
+                        label: "Gamma",
+                        data: monGamma
+
+                    }, {
+                        label: "Theta",
+                        data: monTheta
+                    }, {
+                        label: "Vega",
+                        data: monVega
+                    }]
+                },
+                options: {
+                    title: {
+                        text: "Monthly greeks"
+                    },
+                    tooltips: {
+                      mode: "index",
+                      intersect: false
+                    },
+                    scales: {
+                        xAxes: [{
+                            stacked: true
+                        }],
+                        yAxes: [{
+                            stacked: true
+                        }]
+                    }
+                }
+            });
         }
 
         // Trades
         with($("#div_trades")){
-            html("");
-            append("<table>");
-            append("<tr><th>Instrument</th><th>Trade</th><th>Quantity</th></tr>");
+            html("<table class='table table-sm table-striped'><thead>" +
+                "<tr><th>Instrument</th><th>Trade</th><th>Quantity</th></tr></thead>");
             $.each(jQuery.parseJSON(json[0].trades), function(index, element) {
                 append("<tr><td>"+element.s_names+"</td><td>"+element.s_trade+"</td><td>"+element.val+"</td></tr>")
             });
@@ -316,7 +346,7 @@
             g_theta.push(g_array[j].Theta);
         }
         g_array = JSON.parse(json[0].greek_curve_before);
-        for(var j=0; j , j < g_array.length; j++) {
+        for(j=0; j , j < g_array.length; j++) {
             g_val_b.push(g_array[j].Val);
             g_delta_b.push(g_array[j].Delta);
             g_gamma_b.push(g_array[j].Gamma);
@@ -328,7 +358,7 @@
         var ctx_delta = document.getElementById('delta_plot');
         var ctx_gamma = document.getElementById('gamma_plot');
         var ctx_theta = document.getElementById('theta_plot');
-        var valChart = new Chart(ctx_val, {
+        new Chart(ctx_val, {
             type: 'line',
             data: {
                 labels: g_index,
@@ -337,30 +367,30 @@
                     pointRadius: 0,
                     borderColor: "#ff6384",
                     data: g_val,
-                    fill: false,
+                    fill: false
                 }, {
                     label: "Value at expiry",
                     pointRadius: 0,
                     borderColor: "#36a2eb",
                     data: g_val_exp,
-                    fill: false,
+                    fill: false
                 }, {
                     label: "Value at T+1",
                     pointRadius: 0,
                     borderColor: "#ff661a",
                     data: g_val_p1,
-                    fill: false,
+                    fill: false
                 }, {
                     label: "Value before",
                     pointRadius: 0,
                     borderColor: "#ff6384",
                     data: g_val_b,
                     borderDash: [5, 5],
-                    fill: false,
+                    fill: false
                 }]
             }
         });
-        var deltaChart = new Chart(ctx_delta, {
+        new Chart(ctx_delta, {
             type: 'line',
             title: "Portfolio Delta",
             data: {
@@ -380,7 +410,7 @@
                 }]
             }
         });
-        var gammaChart = new Chart(ctx_gamma, {
+        new Chart(ctx_gamma, {
             type: 'line',
             title: "Portfolio Gamma",
             data: {
@@ -400,7 +430,7 @@
                 }]
             }
         });
-        var thetaChart = new Chart(ctx_theta, {
+        new Chart(ctx_theta, {
             type: 'line',
             title: "Portfolio Theta",
             data: {
@@ -425,10 +455,10 @@
         with($("#table_data")){
             html("<thead><tr class='data'><th class='data'>Instrument</th><th class='data'>Bid</th>"+
                 "<th class='data'>Ask</th><th class='data'>Mid</th>"+
-                "<th class='data'>Expiry(days)</th><th class='data'>Impl Vol</th><th class='data'>Inst Delta</th>"+
-                "<th class='data'>Inst Gamma</th><th class='data'>Inst Theta</th>"+
-                "<th class='data'>Inst Vega</th><th class='data'>Previous position</th>" +
-                "<th class='data'>New position</th></tr></thead>")
+                "<th class='data'>Expiry(days)</th><th class='data'>Impl Vol</th><th class='data'>Delta</th>"+
+                "<th class='data'>Gamma</th><th class='data'>Theta</th>"+
+                "<th class='data'>Vega</th><th class='data'>Previous position</th>" +
+                "<th class='data'>New position</th></tr></thead>");
 
             $.each(jQuery.parseJSON(json[0].data), function(index, element) {
                 if (Number(element["Position"]) !== 0 || Number(element["NewPosition"]) !== 0) {
@@ -444,7 +474,7 @@
                         "</td><td class='data'>" + element["Vega"].toFixed(4) +
                         "</td><td class='data'>" + element["Position"] +
                         "</td><td class='data'>" + element["NewPosition"] +
-                        "</td></tr>")
+                        "</td></tr>");
                 }
             });
 
