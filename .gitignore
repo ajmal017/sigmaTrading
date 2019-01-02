@@ -1,3 +1,6 @@
 optimiser.html
 *.cf
 data/*
+ibapi/*
+tmp/*
+

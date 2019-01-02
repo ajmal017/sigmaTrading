@@ -4,7 +4,7 @@ Code to handle portfolio snapshots, overviews and everything related.
 Author: Peeter Meos
 Date: 2. January 2019
 """
-from .tws import TwsTool
+from tws import TwsTool
 from utils.logger import LogLevel
 from ibapi.contract import Contract
 from ibapi.wrapper import TickType, TickerId
@@ -41,16 +41,17 @@ class Portfolio(TwsTool):
             self.reqMktData(o, i["cont"], "", True, False, [])
             o += 1
 
+        """
         # Wait until we have all the data
         while not self.haveData:
             time.sleep(0.1)
+        """
 
         # Now cancel the mkt data and do some cleanup
         for i in self.portfolio:
             self.cancelMktData(i["id"])
 
         # Summarise
-
         self.disconnect()
 
     def updateAccountValue(self, key: str, val: str, currency: str, account_name: str):
@@ -123,6 +124,6 @@ if __name__ == "__main__":
     Just get a portfolio snapshot
     """
     c = ConfigParser()
-    c.read("config.cf")
+    c.read("../config_live.cf")
     p = Portfolio(c["optimiser"]["account"])
     p.get_snapshot()

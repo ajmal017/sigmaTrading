@@ -571,8 +571,26 @@ if __name__ == "__main__":
                         help="Ignore existing positions in dataset", default=False)
 
     parser.add_argument("data", action="store", help="Market data import, export, manipulations")
+    # TODO: Required functionality for data:
+    #    import from TWS, save to dynamo
+    #    import from CSV, save to dynamo
+    #    export from dynamo to CSV
+    #    list data present in dynamo
+    #    delete delete data snapshot
     parser.add_argument("run", action="store", help="Optimisation commands")
+    # TODO: Required functionality for optimisation
+    #    optimise - run a an optimisation if dtg is not given get the latest snapshot from Dynamo
     parser.add_argument("results", action="store", help="Subcommands for optimisation results")
+    # TODO: Required functionality here if dtg is not specified, get the latest run
+    #    list results
+    #    plot results
+    #    view results
+    #    based on run DTG, export results to xml and csv
+    #    send results to TWS for execution, if status is not "live"
+    #    delete results
+    parser.add_argument("account", action="store", help="Subcommands for portfolio and account")
+    # TODO: required functionality for portfolio
+    #    list display current portfolio snapshot
 
     args = parser.parse_args()
 
@@ -594,13 +612,6 @@ if __name__ == "__main__":
     # TODO: Write command line options for workflow: first 'opt' to do optimisation and write results to db
     #       if the run is fine then 'trade' that does either the xml export, csv export or direct TWS trading
     #       additionally 'snapshot' that just pulls the market snapshot and injects it to Dynamo
-    # TODO: General commands: data import / export- grabs a snapshot from wherever and stores it in the database
-    #                             also add plot option here
-    #                         run optimise - does the optimisation run and stores it in the database
-    #                         run list - list runs in the database
-    #                         run view - plots a run in the database
-    #                         run export - exports a run (xml, csv, possibly tws)
-    #                         run full - does the full workflow
 
     # Figure out where to get input data
     if args.tws:
