@@ -377,6 +377,33 @@ class Optimiser(PortfolioStrategy):
         self.df_greeks_before = self.df_greeks_before.multiply(float(self.get_opt("mult")))
         return 0
 
+    def import_results_dynamo(self, dtg: None) -> dict:
+        """
+        Imports optimisation results from Dynamo
+        :param dtg:
+        :return: dict
+        """
+        from boto3.dynamodb.conditions import Key
+
+        self.logger.log("Importing optimisation results from Dynamo DB")
+
+        db = boto3.resource('dynamodb', region_name='us-east-1',
+                            endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
+        tbl = self.opt["results.table"]
+
+        table = db.Table(tbl)
+
+        # If dtg is not given, get the latest snapshot, otherwise find the right dtg
+        if dtg is None:
+            d_tmp = data.get_list_data(o.opt["results.table"])
+            dtg = max(pd.to_numeric(d_tmp["dtg"]))
+            self.logger.log("Latest timestamp in market data table is " + str(dtg))
+
+        response = table.query(KeyConditionExpression=Key('dtg').eq(str(dtg)))
+        response = response["Items"][0]
+        response["data"] = pd.DataFrame.from_dict(json.loads(response["data"]))
+        return response
+
     def export_results_dynamo(self, dt: dict, tbl: str = None):
         """
         Saves optimisation results to DynamoDB
@@ -520,7 +547,7 @@ class Optimiser(PortfolioStrategy):
         :param df: data dict from optimiser
         :return:
         """
-        # TODO: Here we need to add detection of FUT positions from assigned optionsma
+        # TODO: Here we need to add detection of FUT positions from assigned options
         #  These positions need to be closed and added to both CSV and XML exports
         self.logger.log("FUT position detection and closing currently not implemented")
         return df
@@ -554,51 +581,56 @@ class Optimiser(PortfolioStrategy):
 
 if __name__ == "__main__":
     # Process command line options
-    parser = argparse.ArgumentParser(description="Portfolio optimiser")
+    parser = argparse.ArgumentParser(description="Portfolio optimiser",
+                                     epilog="Copyright (c) 2019 Sigma Research OÜ")
     parser.add_argument("-c", action="store", help="Configuration file")
-    parser.add_argument("-i", action="store", help="Path to input data CSV file")
     parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode. Log only errors.", default=False)
     parser.add_argument("-v", "--verbose", action="store_true", help="Turn on verbose logging", default=False)
-    parser.add_argument("-e", "--exec", action="store_true", help="Execute automatic rebalancing", default=False)
-    parser.add_argument("--tws", action="store_true", help="Import market data from TWS", default=False)
-    parser.add_argument("--db", action="store_true", help="Export optimisation results to Dynamo DB", default=False)
-    parser.add_argument("--xml", action="store", help="Export basket as TWS compatible XML")
-    parser.add_argument("--csv", action="store", help="Export basket as TWS compatible CSV")
-    parser.add_argument("--dtg", action="store", help="DTG for Dynamo DB market snapshot retrieval.")
-    parser.add_argument("--live", action="store_true", help="If set, send live orders, save otherwise", default=False)
-    parser.add_argument("--plot", action="store_true", help="Plot greeks", default=False)
-    parser.add_argument("--ignore_existing", action="store_true",
-                        help="Ignore existing positions in dataset", default=False)
 
-    parser.add_argument("data", action="store", help="Market data import, export, manipulations")
-    # TODO: Required functionality for data:
-    #    import from TWS, save to dynamo
-    #    import from CSV, save to dynamo
-    #    export from dynamo to CSV
-    #    list data present in dynamo
-    #    delete delete data snapshot
-    parser.add_argument("run", action="store", help="Optimisation commands")
-    # TODO: Required functionality for optimisation
-    #    optimise - run a an optimisation if dtg is not given get the latest snapshot from Dynamo
-    parser.add_argument("results", action="store", help="Subcommands for optimisation results")
-    # TODO: Required functionality here if dtg is not specified, get the latest run
-    #    list results
-    #    plot results
-    #    view results
-    #    based on run DTG, export results to xml and csv
-    #    send results to TWS for execution, if status is not "live"
-    #    delete results
-    parser.add_argument("account", action="store", help="Subcommands for portfolio and account")
-    # TODO: required functionality for portfolio
-    #    list display current portfolio snapshot
+    subparsers = parser.add_subparsers(title="subcommands", dest="cmd",
+                                       description="valid subcommands", help="additional help")
+
+    # Data subcommands
+    parser_data = subparsers.add_parser("data", help="Data subcommands")
+    parser_data.add_argument("subcmd", choices=["import", "export", "list", "delete"],
+                             action="store", help="")
+    parser_data.add_argument("-i", action="store", help="Path to input data CSV file")
+    parser_data.add_argument("--tws", action="store_true", help="Import market data from TWS", default=False)
+    parser_data.add_argument("--xml", action="store", help="Export basket as TWS compatible XML")
+    parser_data.add_argument("--csv", action="store", help="Export basket as TWS compatible CSV")
+    parser_data.add_argument("--dtg", action="store", help="DTG for market snapshot retrieval.")
+
+    # Optimisation subcommands
+    parser_run = subparsers.add_parser("run",  help="Optimisation subcommands")
+    parser_run.add_argument("subcmd", choices=["optimise", "formulation"],
+                            action="store", help="Optimisation subcommands")
+    parser_run.add_argument("--db", action="store_true", help="Export optimisation results to Dynamo DB", default=False)
+    parser_run.add_argument("--dtg", action="store", help="DTG for market snapshot retrieval.")
+    parser_run.add_argument("-f", "--file", action="store", help="Formulation file name for import or export")
+    parser_run.add_argument("--ignore_existing", action="store_true",
+                            help="Ignore existing positions in dataset", default=False)
+    parser_run.add_argument("--version", action="store", help="Specify optimisation formulation version")
+
+    # Results subcommands
+    parser_results = subparsers.add_parser("results", help="Results subcommands")
+    parser_results.add_argument("subcmd", choices=["list", "plot", "view", "export", "toggle", "delete", "trade"],
+                                action="store", help="")
+    parser_results.add_argument("--live", action="store_true",
+                                help="If set, send live orders, save otherwise", default=False)
+    parser_results.add_argument("--dtg", action="store", help="DTG for run result retrieval.")
+
+    # Account subcommands
+    parser_account = subparsers.add_parser("account", help="Account handling subcommands")
 
     args = parser.parse_args()
 
+    # Configuration file setup
     if args.c is None:
         conf_file = "config.cf"
     else:
         conf_file = args.c
 
+    # Logging setup
     log = LogLevel.normal
     if args.quiet:
         log = LogLevel.error
@@ -613,39 +645,90 @@ if __name__ == "__main__":
     #       if the run is fine then 'trade' that does either the xml export, csv export or direct TWS trading
     #       additionally 'snapshot' that just pulls the market snapshot and injects it to Dynamo
 
-    # Figure out where to get input data
-    if args.tws:
-        o.get_mkt_data_snapshot(export_dynamo=args.db)
-    elif args.i is None:
-        o.get_mkt_data_dynamo(dtg=args.dtg)
-    else:
-        o.get_mkt_data_csv(args.i)
+    # Data input and output handling
+    if args.cmd == "data":
+        if args.subcmd == "import":
+            if args.i:
+                o.get_mkt_data_csv(args.i)
+                o.save_mkt_data_dynamo()
+            elif args.tws:
+                o.get_mkt_data_snapshot(export_dynamo=True)
+            else:
+                o.logger.error("No import method specified")
+        elif args.subcmd == "export":
+            o.logger.error("Data snapshot export not implemented")
+        elif args.subcmd == "list":
+            df1 = utils.data.get_list_data(o.config["data"]["mkt.table"])
+            print(df1)
+        elif args.subcmd == "delete":
+            o.logger.error("Data snapshot deletion not implemented")
 
-    o.create_gdx(args.ignore_existing)
-    o.run_gams()
-    d = o.import_gdx()
+    # Optimisation handing
+    if args.cmd == "run":
+        if args.subcmd == "optimise":
+            # Get market data from Dynamo and optimise
+            o.get_mkt_data_dynamo(dtg=args.dtg)
+            o.create_gdx(args.ignore_existing)
+            o.run_gams()
+            d = o.import_gdx()
 
-    try:
-        status = o.add_trades_to_df(d)
-    except OptException:
-        status = 1
-        parser.exit(1)
+            # Add optimisation results to the main data frame
+            try:
+                status = o.add_trades_to_df(d)
+            except OptException:
+                status = 1
+                parser.exit(1)
 
-    # No solver results, possible infeasible solution or no trades?
-    if len(d["trades"]) == 0 or status == 1:
-        parser.exit(1)
+            # No solver results, possible infeasible solution or no trades?
+            if len(d["trades"]) == 0 or status == 1:
+                parser.exit(1)
 
-    o.opt_summary(d)
-    d = o.close_fut(d)
+            # Print out summary
+            o.opt_summary(d)
+            d = o.close_fut(d)
 
-    # Outputs
-    if args.plot:
-        o.plot_greeks()
-    if args.db:
-        o.export_results_dynamo(d)
-    if args.csv:
-        o.export_trades_csv(args.csv)
-    if args.xml:
-        tools.export_portfolio_xml(o.df, args.xml)
-    if args.exec:
-        o.basket_order(args.live)
+            # If requested, export results to Dynamo
+            if args.db:
+                o.export_results_dynamo(d)
+            parser.exit(1)
+        elif args.subcmd == "formulation":
+            o.logger.error("Formulation import and export not implemented")
+
+    # Results handling
+    if args.cmd == "results":
+        if args.subcmd == "list":
+            df1 = utils.data.get_list_data(o.opt["results.table"])
+            print(df1)
+
+        elif args.subcmd == "plot":
+            r1 = o.import_results_dynamo(dtg=args.dtg)
+            o.df = r1["data"]
+            o.df_greeks = greeks.build_curves(o.df, ["Val", "Val_p1", "Val_exp", "Delta",
+                                                     "Gamma", "Theta", "Vega"], "NewPosition")
+            o.df_greeks_before = greeks.build_curves(o.df, ["Val", "Val_p1", "Val_exp", "Delta",
+                                                            "Gamma", "Theta", "Vega"], "Position")
+            o.df_greeks = o.df_greeks.multiply(float(o.get_opt("mult")))
+            o.df_greeks_before = o.df_greeks_before.multiply(float(o.get_opt("mult")))
+            o.plot_greeks()
+
+        elif args.subcmd == "view":
+            pass
+        elif args.subcmd == "export":
+            r1 = o.import_results_dynamo(dtg=args.dtg)
+            # TODO Implement the importing!
+            o.logger.error("Exporting not implemented")
+            parser.exit(1)
+            if args.csv:
+                o.export_trades_csv(args.csv)
+            if args.xml:
+                tools.export_portfolio_xml(o.df, args.xml)
+        elif args.subcmd == "toggle":
+            pass
+        elif args.subcmd == "delete":
+            pass
+        elif args.subdmf == "trade":
+            o.basket_order(args.live)
+
+    # Account handling
+    if args.cmd == "account":
+        o.logger.error("Account data handling not implemented")

@@ -20,6 +20,34 @@ class DecimalEncoder(json.JSONEncoder):
         return super(DecimalEncoder, self).default(o)
 
 
+def get_list_data(tbl=None) -> pd.DataFrame:
+    """
+    Retrieves a list of optimisation results
+    :param tbl:
+    :return:
+    """
+    db = boto3.resource('dynamodb', region_name='us-east-1',
+                        endpoint_url="https://dynamodb.us-east-1.amazonaws.com")
+
+    if tbl is None:
+        tbl = "optResults"
+
+    table = db.Table(tbl)
+
+    # If dtg is not given, get the latest snapshot, otherwise find the right dtg
+    response = table.scan(AttributesToGet=["dtg"])
+    r_tmp = response["Items"]
+
+    while "LastEvaluatedKey" in response:
+        response = table.scan(AttributesToGet=["dtg"],
+                              ExclusiveStartKey=response["LastEvaluatedKey"])
+        r_tmp = r_tmp + response["Items"]
+
+    d_tmp1 = pd.DataFrame.from_dict(r_tmp)
+    d_tmp1 = d_tmp1.sort_values(by="dtg")
+    return d_tmp1
+
+
 def write_dynamo(filename: str, tbl: str, inst: str):
     """
     Main code for the snapshot upload
