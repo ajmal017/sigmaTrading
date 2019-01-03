@@ -592,7 +592,7 @@ if __name__ == "__main__":
 
     # Data subcommands
     parser_data = subparsers.add_parser("data", help="Data subcommands")
-    parser_data.add_argument("subcmd", choices=["import", "export", "list", "delete"],
+    parser_data.add_argument("subcmd", choices=["import", "export", "list", "delete", "conid-scraper"],
                              action="store", help="")
     parser_data.add_argument("-i", action="store", help="Path to input data CSV file")
     parser_data.add_argument("--tws", action="store_true", help="Import market data from TWS", default=False)
@@ -662,11 +662,23 @@ if __name__ == "__main__":
             print(df1)
         elif args.subcmd == "delete":
             o.logger.error("Data snapshot deletion not implemented")
+        elif args.subcmd == "conid-scraper":
+            from tws.conid_scraper import IdScraper
+
+            i = IdScraper("ConID Scraper")
+            i.connect("localhost", 4001, 56)
+            i.req_data()
+            i.wait_for_finish()
+            i.postprocess()
+            i.write_dynamo("instruments")
+            i.disconnect()
 
     # Optimisation handing
     if args.cmd == "run":
         if args.subcmd == "optimise":
             # Get market data from Dynamo and optimise
+            # TODO: the snapshot that we retrieve must be for the correct account.
+            #  Otherwise, if we get the latest, then we also need a portfolio snapshot!
             o.get_mkt_data_dynamo(dtg=args.dtg)
             o.create_gdx(args.ignore_existing)
             o.run_gams()

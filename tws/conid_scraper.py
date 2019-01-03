@@ -142,6 +142,7 @@ class IdScraper(TwsTool):
 
 
 if __name__ == "__main__":
+    """
     i = IdScraper("ConID Scraper")
     i.connect("localhost", 4001, 56)
     i.req_data()
@@ -149,3 +150,5 @@ if __name__ == "__main__":
     i.postprocess()
     i.write_dynamo("instruments")
     i.disconnect()
+    """
+    pass
