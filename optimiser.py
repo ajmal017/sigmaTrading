@@ -395,9 +395,9 @@ class Optimiser(PortfolioStrategy):
 
         # If dtg is not given, get the latest snapshot, otherwise find the right dtg
         if dtg is None:
-            d_tmp = data.get_list_data(o.opt["results.table"])
+            d_tmp = utils.data.get_list_data(o.opt["results.table"])
             dtg = max(pd.to_numeric(d_tmp["dtg"]))
-            self.logger.log("Latest timestamp in market data table is " + str(dtg))
+            self.logger.log("Latest timestamp in results data table is " + str(dtg))
 
         response = table.query(KeyConditionExpression=Key('dtg').eq(str(dtg)))
         response = response["Items"][0]
@@ -574,7 +574,7 @@ class Optimiser(PortfolioStrategy):
         p4.line(self.df_greeks.index, self.df_greeks["Val"], line_color="red", legend="Optimal")
         p4.line(self.df_greeks.index, self.df_greeks["Val_p1"], line_color="blue", legend="T+1 day")
         p4.line(self.df_greeks.index, self.df_greeks["Val_exp"], line_color="blue", line_dash="4 4", legend="Expiry")
-        p4.line(self.df_greeks.index, self.df_greeks["Val"], line_color="black", legend="Current")
+        p4.line(self.df_greeks.index, self.df_greeks_before["Val"], line_color="black", legend="Current")
 
         show(gridplot([[p4], [p1, p2, p3]]))
 
