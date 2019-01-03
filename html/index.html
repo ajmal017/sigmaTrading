@@ -14,6 +14,16 @@
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js"></script>
     <script src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
 
+    <script src="https://cdn.datatables.net/select/1.2.7/js/dataTables.select.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/1.5.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/1.5.2/js/buttons.flash.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/1.5.2/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/1.5.2/js/buttons.print.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.19/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/1.5.2/css/buttons.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/select/1.2.7/css/select.dataTables.min.css">
+
     <!--
     <link href="style.css" rel="stylesheet">
     -->
@@ -45,23 +55,58 @@
                     }
                 });
                 result = json;
+                $("#run_table").append("<tbody>")
                 $.each(result, function(i, field){
                     var j = jQuery.parseJSON(field.opt);
                     var s = field.live === true ? "Live" : "Test";
                     var b = field.live === true ? "btn-success" : "btn-light";
                     $("#run_table").append("<tr><td>" +field.date+
+                        "</td><td>" + field.dtg +
                         "</td><td>" + j.symbol +
                         "</td><td>" + j.account +
-                        "</td><td><div id='live"+field.dtg+"' onclick='updateStatus("+field.dtg+ ")'>" +
-                        "<button type='button' class='btn " + b + " btn-sm'>" + s + "</button>" + "</div>" +
-                        "</td>" +
-                        "<td><div class='btn-group btn-group-sm' role='group'>" +
-                        "<button type='button' class='btn btn-warning btn-sm' onclick='deleteRun(" +field.dtg+ ")'>Delete</button>" +
-                        "<button type='button' class='btn btn-info btn-sm'>Parameters</button>" +
-                        "<button type='button' class='btn btn-info btn-sm' onclick='getRun(" + field.dtg + ")'>Details</button>" +
-                        "</div></td></tr>");
+                        "</td><td>" +
+                        s +
+                        //"<div id='live"+field.dtg+"' onclick='updateStatus("+field.dtg+ ")'>" +
+                        //"<button type='button' class='btn " + b + " btn-sm'>" + s + "</button>" + "</div>" +
+                        "</td><td>" +
+                        //"<div class='btn-group btn-group-sm' role='group'>" +
+                        //"<button type='button' class='btn btn-warning btn-sm' onclick='deleteRun(" +field.dtg+ ")'>Delete</button>" +
+                        //"<button type='button' class='btn btn-info btn-sm'>Parameters</button>" +
+                        //"<button type='button' class='btn btn-info btn-sm' onclick='getRun(" + field.dtg + ")'>Details</button>" +
+                        //"</div>" +
+                        "</td></tr>");
                 });
+                $("#run_table").append("</tbody>")
             })();
+
+            // TODO: Here table refresh needs to be added
+            var table = $('#run_table').DataTable({
+                dom: 'Bfrtip',
+                buttons: [
+                    {
+                        text: "Details",
+                        action: function(e, dt, node, config) {
+                            var id = table.rows( { selected: true } ).data()[0][1]
+                            getRun(id)
+                        }
+                    },
+                    {
+                        text: "Toggle status",
+                        action: function(e, dt, node, config) {
+                            var id = table.rows( { selected: true } ).data()[0][1]
+                            updateStatus(id)
+                        }
+                    },
+                    {
+                        text: "Delete",
+                        action : function(e, dt, node, config) {
+                            var id = table.rows( { selected: true } ).data()[0][1]
+                            deleteRun(id)
+                        }
+                    }
+                ],
+                select: true
+            });
         });
     </script>
 </head>
@@ -98,10 +143,11 @@
 
             <h2>Optimisation runs</h2>
             <div id="div_runs">
-            <table id='run_table'>
+            <table id='run_table' class="table table-sm table-striped compact">
                 <thead>
                 <tr>
                     <th style="width:150px">Date</th>
+                    <th style="width:150px">DTG</th>
                     <th style="width:60px">Symbol</th>
                     <th style="width:80px">Account</th>
                     <th style="width:50px">Live</th>
@@ -148,7 +194,7 @@
 
             <h2>Portfolio positions</h2>
             <div id="div_data">
-                <table class="table table-striped table-sm" id="table_data" class="display"></table>
+                <table class="table table-striped table-sm compact" id="table_data" class="display"></table>
             </div>
         </div>
     </div>
@@ -181,7 +227,7 @@
                 'type': 'DELETE',
                 'dataType': "json",
                 success: function(result) {
-                    console.log(result);
+                    // console.log(result);
                 }
             });
         }
@@ -268,7 +314,7 @@
 
             var s = JSON.parse(json[0].monGreeks);
             for (j=0; j<s.length; j++){
-                console.log(s[j]);
+                // console.log(s[j]);
                 if (s[j].s_greeks === "delta")  monDelta.push(s[j].new);
                 if (s[j].s_greeks === "gamma")  monGamma.push(s[j].new);
                 if (s[j].s_greeks === "theta")  monTheta.push(s[j].new);
@@ -461,7 +507,7 @@
                 "<th class='data'>Expiry(days)</th><th class='data'>Impl Vol</th><th class='data'>Delta</th>"+
                 "<th class='data'>Gamma</th><th class='data'>Theta</th>"+
                 "<th class='data'>Vega</th><th class='data'>Previous position</th>" +
-                "<th class='data'>New position</th></tr></thead>");
+                "<th class='data'>New position</th></tr></thead><tbody>");
 
             $.each(jQuery.parseJSON(json[0].data), function(index, element) {
                 if (Number(element["Position"]) !== 0 || Number(element["NewPosition"]) !== 0) {
@@ -480,7 +526,8 @@
                         "</td></tr>");
                 }
             });
-
+            append("</tbody>")
+            DataTable({});
         }
     }
 </script>
