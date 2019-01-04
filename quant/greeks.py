@@ -261,22 +261,23 @@ def build_curves(df: pd.DataFrame, greeks: list, pos_col: str) -> pd.DataFrame:
         k = row["Strike"]
         t = row["Days"]
         px = row["Mid"]
+        sd = str(row["Side"]).lower()
         t1 = t - 1/365
         t1 = np.where(t1 == 0, 0.00001, t1)
         t_e = t - t_min
         t_e = np.where(t_e == 0, 0.00001, t_e)
         if "Val" in greeks:
-            df_out["Val"] = df_out["Val"].add(p * val((1 + r) * spot, k,  0.01, 0, s, t, row["Side"]) - p*px)
+            df_out["Val"] = df_out["Val"].add(p * val((1 + r) * spot, k,  0.01, 0, s, t, sd) - p*px)
         if "Val_p1" in greeks:
-            df_out["Val_p1"] = df_out["Val"].add(p * val((1 + r) * spot, k,  0.01, 0, s, t1, row["Side"]) - p*px)
+            df_out["Val_p1"] = df_out["Val"].add(p * val((1 + r) * spot, k,  0.01, 0, s, t1, sd) - p*px)
         if "Val_exp" in greeks:
-            df_out["Val_exp"] = df_out["Val_exp"].add(p * val((1 + r) * spot, k,  0.01, 0, s, t_e, row["Side"]) - p*px)
+            df_out["Val_exp"] = df_out["Val_exp"].add(p * val((1 + r) * spot, k,  0.01, 0, s, t_e, sd) - p*px)
         if "Delta" in greeks:
-            df_out["Delta"] = df_out["Delta"].add(p * delta((1 + r) * spot, k,  0.01, 0, s, t, row["Side"]))
+            df_out["Delta"] = df_out["Delta"].add(p * delta((1 + r) * spot, k,  0.01, 0, s, t, sd))
         if "Gamma" in greeks:
             df_out["Gamma"] += p * gamma((1 + r) * spot, k,  0.01, 0, s, t)
         if "Theta" in greeks:
-            df_out["Theta"] += p * theta((1 + r) * spot, k,  0.01, 0, s, t, row["Side"])
+            df_out["Theta"] += p * theta((1 + r) * spot, k,  0.01, 0, s, t, sd)
         if "Vega" in greeks:
             df_out["Vega"] += p * vega((1 + r) * spot, k,  0.01, 0, s, t)
 

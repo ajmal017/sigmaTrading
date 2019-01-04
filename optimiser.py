@@ -294,8 +294,8 @@ class Optimiser(PortfolioStrategy):
         # Initialise output dict, enumerate the results and read them from GDX
         x = {}
         t = ["trades", "pos_greeks", "total_greeks", "total_pos", "total_margin", "monthly_greeks"]
-        for i in t:
-            x[i] = data.read_gdx_param(db_out, i)
+        for ind in t:
+            x[ind] = data.read_gdx_param(db_out, ind)
 
         x["total_greeks"] = x["total_greeks"].pivot(index="s_greeks", columns="s_age", values="val")
         x["total_greeks"].reset_index(level=0, inplace=True)
@@ -333,7 +333,7 @@ class Optimiser(PortfolioStrategy):
         self.logger.log("-------------- Greeks --------------")
         self.logger.log("Greek\t      New\t      Old")
         self.logger.log("------------------------------------")
-        for i, r in df["total_greeks"].iterrows():
+        for ind, r in df["total_greeks"].iterrows():
             self.logger.log(r["s_greeks"] + "\t" +
                             "{:9.4f}".format(r["new"]) + "\t" +
                             "{:9.4f}".format(r["old"]))
@@ -341,7 +341,7 @@ class Optimiser(PortfolioStrategy):
         self.logger.log("---------------------- Trades ---------------------")
         self.logger.log("Instrument\t\t\t\tActn  Qty")
         self.logger.log("---------------------------------------------------")
-        for i, r in df["trades"].iterrows():
+        for ind, r in df["trades"].iterrows():
             self.logger.log("{: <35}".format(r["Financial Instrument"]) + "\t" +
                             r["side"] + "\t" +
                             str(r["q"]))
@@ -532,7 +532,7 @@ class Optimiser(PortfolioStrategy):
         c = d_tmp["cont"]
 
         o_id = t.nextId
-        for i, r in df_tmp.iterrows():
+        for ind, r in df_tmp.iterrows():
             self.logger.log(r["Financial Instrument"])
             c.strike = "{:g}".format(r["Strike"])
             c.right = "CALL" if r["Side"] == "c" else "PUT"
@@ -563,34 +563,6 @@ class Optimiser(PortfolioStrategy):
         #  These positions need to be closed and added to both CSV and XML exports
         self.logger.log("FUT position detection and closing currently not implemented")
         return df
-
-    def plot_greeks(self):
-        """
-        Plot greeks
-        :return:
-        """
-        from bokeh.plotting import figure, show
-        from bokeh.layouts import gridplot
-
-        self.logger.log("Outputting bokeh plots")
-        p1 = figure(title="Delta", width=250, height=250)
-        p1.line(self.df_greeks.index, self.df_greeks["Delta"], line_color="red", legend="Optimal")
-        p1.line(self.df_greeks.index, self.df_greeks_before["Delta"], line_color="black", legend="Current")
-        p2 = figure(title="Gamma", width=250, height=250)
-        p2.line(self.df_greeks.index, self.df_greeks["Gamma"], line_color="red", legend="Optimal")
-        p2.line(self.df_greeks.index, self.df_greeks_before["Gamma"], line_color="black", legend="Current")
-        p3 = figure(title="Theta", width=250, height=250)
-        p3.line(self.df_greeks.index, self.df_greeks["Theta"], line_color="red", legend="Optimal")
-        p3.line(self.df_greeks.index, self.df_greeks_before["Theta"], line_color="black", legend="Current`")
-        p4 = figure(title="Val", width=750, height=250)
-        p4.line(self.df_greeks.index, self.df_greeks["Val"], line_color="red", legend="Optimal")
-        p4.line(self.df_greeks.index, self.df_greeks_before["Val"], line_color="black", legend="Current")
-        p4.line(self.df_greeks.index, self.df_greeks["Val_p1"], line_color="blue", legend="T+1 day")
-        p4.line(self.df_greeks.index, self.df_greeks["Val_exp"], line_color="blue", line_dash="4 4", legend="Expiry")
-        p4.line(self.df_greeks.index, self.df_greeks_before["Val_exp"], line_color="black", line_dash="4 4",
-                legend="Expiry before")
-
-        show(gridplot([[p4], [p1, p2, p3]]))
 
 
 if __name__ == "__main__":
@@ -635,8 +607,10 @@ if __name__ == "__main__":
 
     # Account subcommands
     parser_account = subparsers.add_parser("account", help="Account handling subcommands")
-    parser_account.add_argument("subcmd", choices=["summary", "details", "plot"],
-                                action="store", help="")
+    parser_account.add_argument("subcmd", choices=["summary", "details"], action="store", help="")
+
+    parser_port = subparsers.add_parser("portfolio", help="Portfolio handling subcommands")
+    parser_port.add_argument("subcmd", choices=["summary", "plot"], action="store", help="")
 
     args = parser.parse_args()
 
@@ -715,6 +689,7 @@ if __name__ == "__main__":
 
         # If requested, export results to Dynamo
         if args.db:
+            # TODO: Here differentiate between optimisation timestamp and data timestamp!
             o.export_results_dynamo(d)
         parser.exit(1)
 
@@ -729,6 +704,7 @@ if __name__ == "__main__":
             print(df1)
 
         elif args.subcmd == "plot":
+            from utils.plots import plot_greeks
             r1 = o.import_results_dynamo(dtg=args.dtg)
             o.df = r1["data"]
             o.df_greeks = greeks.build_curves(o.df, ["Val", "Val_p1", "Val_exp", "Delta",
@@ -737,7 +713,7 @@ if __name__ == "__main__":
                                                             "Gamma", "Theta", "Vega"], "Position")
             o.df_greeks = o.df_greeks.multiply(float(o.get_opt("mult")))
             o.df_greeks_before = o.df_greeks_before.multiply(float(o.get_opt("mult")))
-            o.plot_greeks()
+            plot_greeks(o.df_greeks, o.df_greeks_before)
 
         elif args.subcmd == "view":
             pass
@@ -763,11 +739,23 @@ if __name__ == "__main__":
     if args.cmd == "account":
         from tws.portfolio import Portfolio
         if args.subcmd == "summary":
-            p = Portfolio(o.account_name, log_level=o.loglevel)
+            p = Portfolio(o.opt, log_level=o.loglevel, name="Account")
             p.get_account_summary()
         elif args.subcmd == "details":
-            p = Portfolio(o.account_name, log_level=o.loglevel)
+            p = Portfolio(o.opt, log_level=o.loglevel, name="Account")
             p.get_account_details()
-        elif args.subcmd == "plot":
-            o.logger.error("Account plotting not yet implemented")
 
+    if args.cmd == "portfolio":
+        from tws.portfolio import Portfolio
+        if args.subcmd == "summary":
+            p = Portfolio(o.opt, log_level=o.loglevel)
+            pf = p.get_snapshot()
+            p.print_snapshot(pf)
+        elif args.subcmd == "plot":
+            from utils.plots import plot_greeks
+
+            p = Portfolio(o.opt, log_level=o.loglevel)
+            pf = p.get_snapshot()
+            pf_greeks = greeks.build_curves(pf, ["Val", "Val_exp", "Val_p1", "Delta", "Gamma", "Theta", "Vega"],
+                                            "Position")
+            plot_greeks(pf_greeks)
