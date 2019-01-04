@@ -177,6 +177,13 @@ class Optimiser(PortfolioStrategy):
                                                                          self.df["Vol"], self.df["Days"],
                                                                          self.df["Side"])
 
+        self.df["Theta Up"] = greeks.theta(price_up, self.df["Strike"], 0.01, 0, self.df["Vol"],
+                                           self.df["Days"], self.df["Side"])
+
+        self.df["Theta Down"] = greeks.theta(price_down, self.df["Strike"], 0.01, 0,
+                                             self.df["Vol"], self.df["Days"],
+                                             self.df["Side"])
+
         # ACTUAL GDX CREATION STARTS HERE
         # Create sets for data
         data.create_set(self.db, "s_greeks", "List of greeks",
@@ -239,6 +246,9 @@ class Optimiser(PortfolioStrategy):
         data.create_parameter(self.db, "p_risk", "Upside and downside risk",
                               [self.df["Financial Instrument"], ["up", "down"]], "full",
                               self.df[["Financial Instrument", "Price Up", "Price Down"]])
+        data.create_parameter(self.db, "p_theta", "Upside and downside theta",
+                              [self.df["Financial Instrument"], ["up", "down"]], "full",
+                              self.df[["Financial Instrument", "Theta Up", "Theta Down"]])
         data.create_parameter(self.db, "p_spread", "Bid ask spread", [self.df["Financial Instrument"]], "sparse",
                               self.df["Spread"])
         data.create_parameter(self.db, "p_days", "Days until expiry", [self.df["Financial Instrument"]], "sparse",
