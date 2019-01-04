@@ -120,7 +120,7 @@ class Portfolio(TwsTool):
         # if account_name == self.acct:
         self.logger.log(contract.symbol.ljust(5) + " " + str(position).rjust(6) + " " +
                         str(round(market_price, 3)).rjust(5) +
-                        " " + str(unrealized_pnl).rjust(10))
+                        " " + str(unrealized_pnl).rjust(12))
         self.portfolio.append({"cont": contract})
 
     def accountSummary(self, req_id: int, account: str, tag: str, value: str, currency: str):

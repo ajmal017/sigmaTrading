@@ -196,7 +196,7 @@ class Snapshot(TwsTool):
                 if und_price is not None:
                     i["Underlying Price"] = und_price
                 else:
-                    print(i["Financial Instrument"])
+                    self.logger.error(i["Financial Instrument"] + " not found")
                 if tick_type == 13:
                     i["Delta"] = delta
                     i["Gamma"] = gamma
