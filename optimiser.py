@@ -20,6 +20,7 @@ from tws import tools, snapshot, tws
 from ibapi.order import Order
 import argparse
 import os
+from os import environ
 import sys
 
 
@@ -583,9 +584,11 @@ class Optimiser(PortfolioStrategy):
         p3.line(self.df_greeks.index, self.df_greeks_before["Theta"], line_color="black", legend="Current`")
         p4 = figure(title="Val", width=750, height=250)
         p4.line(self.df_greeks.index, self.df_greeks["Val"], line_color="red", legend="Optimal")
+        p4.line(self.df_greeks.index, self.df_greeks_before["Val"], line_color="black", legend="Current")
         p4.line(self.df_greeks.index, self.df_greeks["Val_p1"], line_color="blue", legend="T+1 day")
         p4.line(self.df_greeks.index, self.df_greeks["Val_exp"], line_color="blue", line_dash="4 4", legend="Expiry")
-        p4.line(self.df_greeks.index, self.df_greeks_before["Val"], line_color="black", legend="Current")
+        p4.line(self.df_greeks.index, self.df_greeks_before["Val_exp"], line_color="black", line_dash="4 4",
+                legend="Expiry before")
 
         show(gridplot([[p4], [p1, p2, p3]]))
 
@@ -612,15 +615,15 @@ if __name__ == "__main__":
     parser_data.add_argument("--dtg", action="store", help="DTG for market snapshot retrieval.")
 
     # Optimisation subcommands
-    parser_run = subparsers.add_parser("run",  help="Optimisation subcommands")
-    parser_run.add_argument("subcmd", choices=["optimise", "formulation"],
-                            action="store", help="Optimisation subcommands")
-    parser_run.add_argument("--db", action="store_true", help="Export optimisation results to Dynamo DB", default=False)
-    parser_run.add_argument("--dtg", action="store", help="DTG for market snapshot retrieval.")
-    parser_run.add_argument("-f", "--file", action="store", help="Formulation file name for import or export")
-    parser_run.add_argument("--ignore_existing", action="store_true",
+    parser_opt = subparsers.add_parser("optimise",  help="Optimisation subcommands")
+    parser_opt.add_argument("--db", action="store_true", help="Export optimisation results to Dynamo DB", default=False)
+    parser_opt.add_argument("--dtg", action="store", help="DTG for market snapshot retrieval.")
+    parser_opt.add_argument("--ignore_existing", action="store_true",
                             help="Ignore existing positions in dataset", default=False)
-    parser_run.add_argument("--version", action="store", help="Specify optimisation formulation version")
+
+    parser_form = subparsers.add_parser("formulation",  help="Formulation subcommands")
+    parser_form.add_argument("-f", "--file", action="store", help="Formulation file name for import or export")
+    parser_form.add_argument("--version", action="store", help="Specify optimisation formulation version")
 
     # Results subcommands
     parser_results = subparsers.add_parser("results", help="Results subcommands")
@@ -632,16 +635,18 @@ if __name__ == "__main__":
 
     # Account subcommands
     parser_account = subparsers.add_parser("account", help="Account handling subcommands")
-    parser_account.add_argument("subcmd", choices=["summary", "details"],
+    parser_account.add_argument("subcmd", choices=["summary", "details", "plot"],
                                 action="store", help="")
 
     args = parser.parse_args()
 
     # Configuration file setup
-    if args.c is None:
-        conf_file = "config.cf"
-    else:
+    if args.c is not None:
         conf_file = args.c
+    elif environ.get("TRADER_CONFIG") is not None:
+        conf_file = environ.get("TRADER_CONFIG")
+    else:
+        conf_file = "config.cf"
 
     # Logging setup
     log = LogLevel.normal
@@ -654,9 +659,6 @@ if __name__ == "__main__":
     o = Optimiser(conf_file, loglevel=log)
     # TODO: Something that checks whether TWS is connected to the correct account (cf. config file)
     # TODO: Write a config check code, that verifies the contents of the configuration file before proceeding
-    # TODO: Write command line options for workflow: first 'opt' to do optimisation and write results to db
-    #       if the run is fine then 'trade' that does either the xml export, csv export or direct TWS trading
-    #       additionally 'snapshot' that just pulls the market snapshot and injects it to Dynamo
 
     # Data input and output handling
     if args.cmd == "data":
@@ -687,36 +689,36 @@ if __name__ == "__main__":
             i.disconnect()
 
     # Optimisation handing
-    if args.cmd == "run":
-        if args.subcmd == "optimise":
-            # Get market data from Dynamo and optimise
-            # TODO: the snapshot that we retrieve must be for the correct account.
-            #  Otherwise, if we get the latest, then we also need a portfolio snapshot!
-            o.get_mkt_data_dynamo(dtg=args.dtg)
-            o.create_gdx(args.ignore_existing)
-            o.run_gams()
-            d = o.import_gdx()
+    if args.cmd == "optimise":
+        # Get market data from Dynamo and optimise
+        # TODO: the snapshot that we retrieve must be for the correct account.
+        #  Otherwise, if we get the latest, then we also need a portfolio snapshot!
+        o.get_mkt_data_dynamo(dtg=args.dtg)
+        o.create_gdx(args.ignore_existing)
+        o.run_gams()
+        d = o.import_gdx()
 
-            # Add optimisation results to the main data frame
-            try:
-                status = o.add_trades_to_df(d)
-            except OptException:
-                status = 1
-                parser.exit(1)
-
-            # No solver results, possible infeasible solution or no trades?
-            if len(d["trades"]) == 0 or status == 1:
-                parser.exit(1)
-
-            # Print out summary
-            o.opt_summary(d)
-            d = o.close_fut(d)
-
-            # If requested, export results to Dynamo
-            if args.db:
-                o.export_results_dynamo(d)
+        # Add optimisation results to the main data frame
+        try:
+            status = o.add_trades_to_df(d)
+        except OptException:
+            status = 1
             parser.exit(1)
-        elif args.subcmd == "formulation":
+
+        # No solver results, possible infeasible solution or no trades?
+        if len(d["trades"]) == 0 or status == 1:
+            parser.exit(1)
+
+        # Print out summary
+        o.opt_summary(d)
+        d = o.close_fut(d)
+
+        # If requested, export results to Dynamo
+        if args.db:
+            o.export_results_dynamo(d)
+        parser.exit(1)
+
+        if args.cmd == "formulation":
             o.logger.error("Formulation import and export not implemented")
 
     # Results handling
@@ -766,4 +768,6 @@ if __name__ == "__main__":
         elif args.subcmd == "details":
             p = Portfolio(o.account_name, log_level=o.loglevel)
             p.get_account_details()
+        elif args.subcmd == "plot":
+            o.logger.error("Account plotting not yet implemented")
 
