@@ -8,7 +8,7 @@ from tws import TwsTool
 from utils.logger import LogLevel
 from ibapi.contract import Contract
 from ibapi.wrapper import TickType, TickerId
-from configparser import ConfigParser
+from ibapi.account_summary_tags import AccountSummaryTags
 import time
 
 
@@ -20,6 +20,37 @@ class Portfolio(TwsTool):
         self.portfolio = []
         self.value = 0.0
 
+    def get_account_summary(self):
+        """
+        Simply prints out account summary
+        :return:
+        """
+        self.connect("localhost", 4001, 32)
+        self.haveData = False
+
+        self.logger.log("-------------- Account --------------")
+        self.reqAccountSummary(self.nextId, "All", AccountSummaryTags.AllTags)
+        while not self.haveData:
+            time.sleep(0.01)
+        self.logger.log("-------------------------------------")
+        self.disconnect()
+
+    def get_account_details(self):
+        """
+        Simply prints out account details
+        :return:
+        """
+        self.connect("localhost", 4001, 32)
+        self.haveData = False
+
+        self.logger.log("-------------- Account --------------")
+        self.reqAccountUpdates(True, self.acct)
+        while not self.haveData:
+            time.sleep(0.01)
+        self.logger.log("-------------------------------------")
+        self.reqAccountUpdates(False, self.acct)
+        self.disconnect()
+
     def get_snapshot(self):
         """
         Gets portfolio snapshot and does a summary on that
@@ -28,12 +59,17 @@ class Portfolio(TwsTool):
         # TODO: Get rid of those hardcoded parameters, use config file instead
         self.connect("localhost", 4001, 32)
 
+        """
         self.reqAccountUpdates(True, self.acct)
         while not self.haveData:
-            time.sleep(0.1)
+            time.sleep(0.01)
         self.reqAccountUpdates(False, self.acct)
 
+        """
+
+
         # TODO: Add snapshot summary here, like total unrealised PNL
+        """
         self.haveData = False
         o = self.nextId
         for i in self.portfolio:
@@ -41,17 +77,18 @@ class Portfolio(TwsTool):
             self.reqMktData(o, i["cont"], "", True, False, [])
             o += 1
 
-        """
+        
         # Wait until we have all the data
         while not self.haveData:
             time.sleep(0.1)
         """
 
+        """
         # Now cancel the mkt data and do some cleanup
         for i in self.portfolio:
             self.cancelMktData(i["id"])
 
-        # Summarise
+        """
         self.disconnect()
 
     def updateAccountValue(self, key: str, val: str, currency: str, account_name: str):
@@ -63,8 +100,8 @@ class Portfolio(TwsTool):
         :param account_name:
         :return:
         """
-        if account_name == self.acct:
-            self.logger.log(key + " " + val + " " + currency)
+        #if account_name == self.acct:
+        self.logger.log(key.ljust(30) + "\t" + val.rjust(10) + " " + currency)
 
     def updatePortfolio(self, contract: Contract, position: float, market_price: float, market_value: float,
                         average_cost: float, unrealized_pnl: float, realized_pnl: float, account_name: str):
@@ -80,10 +117,31 @@ class Portfolio(TwsTool):
         :param account_name:
         :return:
         """
-        if account_name == self.acct:
-            self.logger.log(contract.symbol + " " + str(position) + " " +
-                            str(market_price) + " " + str(unrealized_pnl))
-            self.portfolio.append({"cont": contract})
+        # if account_name == self.acct:
+        self.logger.log(contract.symbol.ljust(5) + " " + str(position).rjust(6) + " " +
+                        str(round(market_price, 3)).rjust(5) +
+                        " " + str(unrealized_pnl).rjust(10))
+        self.portfolio.append({"cont": contract})
+
+    def accountSummary(self, req_id: int, account: str, tag: str, value: str, currency: str):
+        """
+        Account summary information
+        :param req_id:
+        :param account:
+        :param tag:
+        :param value:
+        :param currency:
+        :return:
+        """
+        self.logger.log(tag.ljust(25) + "\t" + value + " " + currency)
+
+    def accountSummaryEnd(self, req_id: int):
+        """
+        End of account summary
+        :param req_id:
+        :return:
+        """
+        self.haveData = True
 
     def accountDownloadEnd(self, account_name: str):
         """
@@ -91,8 +149,8 @@ class Portfolio(TwsTool):
         :param account_name:
         :return:
         """
-        if account_name == self.acct:
-            self.haveData = True
+        #if account_name == self.acct:
+        self.haveData = True
 
     def tickOptionComputation(self, req_id: TickerId, tick_type: TickType, implied_vol: float, delta: float,
                               opt_price: float, pv_dividend: float, gamma: float, vega: float, theta: float,
@@ -119,11 +177,3 @@ class Portfolio(TwsTool):
                 i["Vega"] = vega
 
 
-if __name__ == "__main__":
-    """
-    Just get a portfolio snapshot
-    """
-    c = ConfigParser()
-    c.read("../config_live.cf")
-    p = Portfolio(c["optimiser"]["account"])
-    p.get_snapshot()

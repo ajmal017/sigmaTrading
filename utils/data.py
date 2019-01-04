@@ -20,10 +20,11 @@ class DecimalEncoder(json.JSONEncoder):
         return super(DecimalEncoder, self).default(o)
 
 
-def get_list_data(tbl=None) -> pd.DataFrame:
+def get_list_data(tbl=None, attributes=["dtg"]) -> pd.DataFrame:
     """
     Retrieves a list of optimisation results
     :param tbl:
+    :param attributes: Attributes to retrieve
     :return:
     """
     db = boto3.resource('dynamodb', region_name='us-east-1',
@@ -35,11 +36,11 @@ def get_list_data(tbl=None) -> pd.DataFrame:
     table = db.Table(tbl)
 
     # If dtg is not given, get the latest snapshot, otherwise find the right dtg
-    response = table.scan(AttributesToGet=["dtg"])
+    response = table.scan(AttributesToGet=attributes)
     r_tmp = response["Items"]
 
     while "LastEvaluatedKey" in response:
-        response = table.scan(AttributesToGet=["dtg"],
+        response = table.scan(AttributesToGet=attributes,
                               ExclusiveStartKey=response["LastEvaluatedKey"])
         r_tmp = r_tmp + response["Items"]
 

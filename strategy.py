@@ -29,6 +29,7 @@ class PortfolioStrategy:
         self.data_date = datetime.datetime.today()
         self.config = configparser.ConfigParser()
         self.inst = ""
+        self.account_name = ""
 
     def save_mkt_data_dynamo(self):
         """
@@ -41,6 +42,7 @@ class PortfolioStrategy:
         # Instrument
         dct = self.df.to_dict(orient="split")
         dct["dtg"] = dtg
+        dct["account"] = self.account_name
         dct["inst"] = self.inst
         dct["data"] = json.dumps(dct["data"])
 
@@ -65,15 +67,18 @@ class PortfolioStrategy:
 
         # If dtg is not given, get the latest snapshot, otherwise find the right dtg
         if dtg is None:
-            response = table.scan(AttributesToGet=["dtg"])
+            response = table.scan(AttributesToGet=["dtg", "account"])
             r = response["Items"]
 
             while "LastEvaluatedKey" in response:
-                response = table.scan(AttributesToGet=["dtg"],
+                response = table.scan(AttributesToGet=["dtg", "account"],
                                       ExclusiveStartKey=response["LastEvaluatedKey"])
                 r = r + response["Items"]
 
             d = pd.DataFrame.from_dict(r)
+            # TODO: Add check for all required columns present
+            d = d[d["account"] == self.account_name]
+            # TODO: Add check for no data present
             dtg = max(d["dtg"])
             self.logger.log("Latest timestamp in market data table is " + str(dtg))
 
@@ -91,3 +96,5 @@ class PortfolioStrategy:
         self.logger.log("Reading market data from CSV file " + fn)
         self.df = pd.read_csv(fn, na_values="NoMD", index_col=False)
         self.data_date = datetime.datetime.fromtimestamp(os.path.getmtime(fn))
+
+

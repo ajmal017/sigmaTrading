@@ -305,6 +305,7 @@ class Snapshot(TwsTool):
         # Instrument
         data = self.df.to_dict(orient="split")
         data["dtg"] = int(dtg)
+        data["account"] = self.account_name
         data["inst"] = self.cont.symbol
         data["data"] = json.dumps(data["data"])
 

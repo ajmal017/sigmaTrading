@@ -84,23 +84,28 @@
                 dom: 'Bfrtip',
                 buttons: [
                     {
+                        // TODO: Make parameters table as a modal window
+                        //     With some key parameters displayed in the run list table
+                        text: "Parameters"
+                    },
+                    {
                         text: "Details",
                         action: function(e, dt, node, config) {
-                            var id = table.rows( { selected: true } ).data()[0][1]
+                            var id = table.rows( { selected: true } ).data()[0][1];
                             getRun(id)
                         }
                     },
                     {
                         text: "Toggle status",
                         action: function(e, dt, node, config) {
-                            var id = table.rows( { selected: true } ).data()[0][1]
+                            var id = table.rows( { selected: true } ).data()[0][1];
                             updateStatus(id)
                         }
                     },
                     {
                         text: "Delete",
                         action : function(e, dt, node, config) {
-                            var id = table.rows( { selected: true } ).data()[0][1]
+                            var id = table.rows( { selected: true } ).data()[0][1];
                             deleteRun(id)
                         }
                     }
@@ -194,7 +199,7 @@
 
             <h2>Portfolio positions</h2>
             <div id="div_data">
-                <table class="table table-striped table-sm compact" id="table_data" class="display"></table>
+                <table class="table table-striped table-sm compact display" id="table_data" ></table>
             </div>
         </div>
     </div>

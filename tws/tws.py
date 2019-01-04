@@ -65,6 +65,7 @@ class TwsTool(TwsWrapper, TwsClient):
         self.logger = Logger(log_level, name)
         self.nextId = -1
         self.thread = Thread(target=self.run)
+        self.account_name = ""
 
         self.req_val_id = -1
         self.req_val = 0
@@ -77,6 +78,15 @@ class TwsTool(TwsWrapper, TwsClient):
         """
         self.logger.verbose("Next ID received: " + str(order_id))
         self.nextId = int(order_id)
+
+    def managedAccounts(self, accounts_list:str):
+        """
+        Managed accounts processing
+        :param accounts_list:
+        :return:
+        """
+        self.logger.verbose("Managed accounts are " + accounts_list)
+        self.account_name = accounts_list
 
     def orderStatus(self, order_id: OrderId, status: str, filled: float,
                     remaining: float, avg_fill_price: float, perm_id: int,
@@ -136,7 +146,7 @@ class TwsTool(TwsWrapper, TwsClient):
         :param con_id:
         :return:
         """
-        self.logger.log("Connecting to TWS at " + host + ":" + str(port))
+        self.logger.verbose("Connecting to TWS at " + host + ":" + str(port))
         TwsClient.connect(self, host, port, con_id)
 
         self.logger.verbose("Starting event processing thread")

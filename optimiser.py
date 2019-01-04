@@ -46,6 +46,7 @@ class Optimiser(PortfolioStrategy):
         self.config.read(cf)
         gams_path = self.config["optimiser"]["gams"]
         self.opt = self.config["optimiser"]
+        self.account_name = self.opt["account"]
 
         # Init GAMS
         if self.loglevel == logger.LogLevel.normal:
@@ -631,6 +632,8 @@ if __name__ == "__main__":
 
     # Account subcommands
     parser_account = subparsers.add_parser("account", help="Account handling subcommands")
+    parser_account.add_argument("subcmd", choices=["summary", "details"],
+                                action="store", help="")
 
     args = parser.parse_args()
 
@@ -668,7 +671,7 @@ if __name__ == "__main__":
         elif args.subcmd == "export":
             o.logger.error("Data snapshot export not implemented")
         elif args.subcmd == "list":
-            df1 = utils.data.get_list_data(o.config["data"]["mkt.table"])
+            df1 = utils.data.get_list_data(o.config["data"]["mkt.table"], attributes=["dtg", "account"])
             print(df1)
         elif args.subcmd == "delete":
             o.logger.error("Data snapshot deletion not implemented")
@@ -719,6 +722,7 @@ if __name__ == "__main__":
     # Results handling
     if args.cmd == "results":
         if args.subcmd == "list":
+            # TODO: Besides just DTG I would also need account and some key risk metrics, gamma and theta perhaps?
             df1 = utils.data.get_list_data(o.opt["results.table"])
             print(df1)
 
@@ -749,8 +753,17 @@ if __name__ == "__main__":
         elif args.subcmd == "delete":
             pass
         elif args.subdmf == "trade":
+            o.logger.error("Trade functionality not implemented")
+            parser.exit(1)
             o.basket_order(args.live)
 
     # Account handling
     if args.cmd == "account":
-        o.logger.error("Account data handling not implemented")
+        from tws.portfolio import Portfolio
+        if args.subcmd == "summary":
+            p = Portfolio(o.account_name, log_level=o.loglevel)
+            p.get_account_summary()
+        elif args.subcmd == "details":
+            p = Portfolio(o.account_name, log_level=o.loglevel)
+            p.get_account_details()
+
