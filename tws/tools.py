@@ -37,13 +37,12 @@ def lookup_contract_id(df, tbl: str):
 
     # res is list of dicts, contains instString and conid
     res = pd.DataFrame(res)
-    res.columns = ["conid", "Financial Instrument"]
+    res.columns = ["conid", "expiry", "Financial Instrument"]
+    res = res[["conid", "Financial Instrument"]]
 
     res["Financial Instrument"] = res["Financial Instrument"].astype(str)
     df["Financial Instrument"] = df["Financial Instrument"].astype(str)
-
     df = pd.merge(df, res, left_on="Financial Instrument", right_on="Financial Instrument")
-
     if pd.isna(df["conid"]).any():
         log.error("Missing contract IDs, consider running ID scraper!")
 
@@ -84,6 +83,9 @@ def export_portfolio_xml(data: pd.DataFrame, fn: str, trades=False, loglevel: Lo
         tmp = data[data["NewPosition"] != 0].copy()
 
     tmp = lookup_contract_id(tmp, "instruments")
+
+    if "Avg Price" not in tmp:
+        tmp["Avg Price"] = 0
 
     x = Element("CustAcct")
     x.set("version", "1.0")

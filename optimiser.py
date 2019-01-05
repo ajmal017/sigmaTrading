@@ -50,6 +50,7 @@ class Optimiser(PortfolioStrategy):
         self.account_name = self.opt["account"]
 
         # Init GAMS
+        self.code_version = ""
         if self.loglevel == logger.LogLevel.normal:
             gams_debug_level = DebugLevel.KeepFiles
         elif self.loglevel == logger.LogLevel.verbose:
@@ -270,13 +271,15 @@ class Optimiser(PortfolioStrategy):
         response = ""
         if fn is None:
             self.logger.log("Getting the most recent formulation")
-            response = code.get_code("gamsCode")["code"]
+            response = code.get_code("gamsCode")
+            self.code_version = response["version"]
+            model_code = response["code"]
 
         self.logger.log("Running GAMS job")
         if fn is not None:
             model = self.ws.add_job_from_file(fn)
         else:
-            model = self.ws.add_job_from_string(response)
+            model = self.ws.add_job_from_string(model_code)
         model.run(databases=self.db)
 
     def import_gdx(self, fn=None):
@@ -429,8 +432,10 @@ class Optimiser(PortfolioStrategy):
                 "Strike", "Side", "Days", "Vol", "Delta", "Gamma", "Theta", "Vega", "Contract Month"]
         df_tmp = self.df[cols].copy()
 
-        x = {"dtg": self.data_date.strftime("%y%m%d%H%M%S"),
+        x = {"dtg": datetime.now().strftime("%y%m%d%H%M%S"),
+             "formulation": self.code_version,
              "data": df_tmp.to_json(orient="records"),
+             "dataDtg": self.data_date.strftime("%y%m%d%H%M%S"),
              "greeks": dt["total_greeks"].to_json(orient="records"),
              "live": False,
              "margin": dt["total_margin"].to_json(orient="records"),
@@ -467,6 +472,9 @@ class Optimiser(PortfolioStrategy):
         :return:
         """
         self.logger.log("Exporting trades basket to " + fn)
+
+        if "Trade" not in self.df:
+            self.df["Trade"] = self.df["NewPosition"] - self.df["Position"]
 
         df_tmp = self.df[self.df["Trade"] != 0]
 
@@ -582,8 +590,6 @@ if __name__ == "__main__":
                              action="store", help="")
     parser_data.add_argument("-i", action="store", help="Path to input data CSV file")
     parser_data.add_argument("--tws", action="store_true", help="Import market data from TWS", default=False)
-    parser_data.add_argument("--xml", action="store", help="Export basket as TWS compatible XML")
-    parser_data.add_argument("--csv", action="store", help="Export basket as TWS compatible CSV")
     parser_data.add_argument("--dtg", action="store", help="DTG for market snapshot retrieval.")
 
     # Optimisation subcommands
@@ -604,6 +610,8 @@ if __name__ == "__main__":
     parser_results.add_argument("--live", action="store_true",
                                 help="If set, send live orders, save otherwise", default=False)
     parser_results.add_argument("--dtg", action="store", help="DTG for run result retrieval.")
+    parser_results.add_argument("--xml", action="store", help="Export basket as TWS compatible XML")
+    parser_results.add_argument("--csv", action="store", help="Export basket as TWS compatible CSV")
 
     # Account subcommands
     parser_account = subparsers.add_parser("account", help="Account handling subcommands")
@@ -653,7 +661,7 @@ if __name__ == "__main__":
             o.logger.error("Data snapshot deletion not implemented")
         elif args.subcmd == "conid-scraper":
             from tws.conid_scraper import IdScraper
-
+            # TODO: Replace hardcoded values here with option file
             i = IdScraper("ConID Scraper")
             i.connect("localhost", 4001, 56)
             i.req_data()
@@ -689,7 +697,6 @@ if __name__ == "__main__":
 
         # If requested, export results to Dynamo
         if args.db:
-            # TODO: Here differentiate between optimisation timestamp and data timestamp!
             o.export_results_dynamo(d)
         parser.exit(1)
 
@@ -719,9 +726,7 @@ if __name__ == "__main__":
             pass
         elif args.subcmd == "export":
             r1 = o.import_results_dynamo(dtg=args.dtg)
-            # TODO Implement the importing!
-            o.logger.error("Exporting not implemented")
-            parser.exit(1)
+            o.df = r1["data"]
             if args.csv:
                 o.export_trades_csv(args.csv)
             if args.xml:
