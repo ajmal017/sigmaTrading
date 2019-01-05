@@ -153,8 +153,8 @@ class Portfolio(TwsTool):
         :param account_name:
         :return:
         """
-        #if account_name == self.acct:
         if self.details:
+            # if account_name == self.acct:
             self.logger.log(key.ljust(30) + "\t" + val.rjust(10) + " " + currency)
 
     def updatePortfolio(self, contract: Contract, position: float, market_price: float, market_value: float,
@@ -211,7 +211,7 @@ class Portfolio(TwsTool):
         :param account_name:
         :return:
         """
-        #if account_name == self.acct:
+        # if account_name == self.acct:
         self.haveData = True
 
     def tickOptionComputation(self, req_id: TickerId, tick_type: TickType, implied_vol: float, delta: float,
@@ -239,5 +239,3 @@ class Portfolio(TwsTool):
                 i["Vega"] = vega
                 i["Vol"] = implied_vol
                 i["Underlying Price"] = und_price
-
-
