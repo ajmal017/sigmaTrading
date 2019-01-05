@@ -17,7 +17,6 @@ import pandas as pd
 import numpy as np
 import time
 import boto3
-import argparse
 import json
 
 """
@@ -316,25 +315,3 @@ class Snapshot(TwsTool):
             self.logger.verbose("Data export to DynamoDB successful")
         else:
             self.logger.error("Failed to export data to DynamoDB")
-
-
-if __name__ == "__main__":
-    # Process command line arguments first
-    parser = argparse.ArgumentParser("Market data capture tool")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Produce verbose output")
-    parser.add_argument("-q", "--quiet", action="store_true", help="Minimal logging, only output errors")
-    parser.add_argument("--db", action="store_true", help="Write snapshot to Dynamo DB")
-    parser.add_argument("--csv", action="store", help="Write snapshot to given CSV file")
-
-    args = parser.parse_args()
-
-    # Now the actual stuff
-    tws = Snapshot()
-
-    tws.connect("localhost", 4001, 12)
-    tws.create_instruments()
-    tws.wait_to_finish()
-    df1 = tws.prepare_df()
-    df1.to_csv("./data/out.csv", index=None)
-    tws.export_dynamo()
-    tws.disconnect()

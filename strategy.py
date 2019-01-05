@@ -96,5 +96,3 @@ class PortfolioStrategy:
         self.logger.log("Reading market data from CSV file " + fn)
         self.df = pd.read_csv(fn, na_values="NoMD", index_col=False)
         self.data_date = datetime.datetime.fromtimestamp(os.path.getmtime(fn))
-
-

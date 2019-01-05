@@ -26,6 +26,8 @@ class Portfolio(TwsTool):
         self.haveData = False
         self.acct = opt["account"]
         self.symbol = opt["symbol"]
+        self.host = opt["host"]
+        self.port = int(opt["port"])
         self.portfolio = []
         self.value = 0.0
         self.details = False
@@ -35,14 +37,14 @@ class Portfolio(TwsTool):
         Simply prints out account summary
         :return:
         """
-        self.connect("localhost", 4001, 32)
+        self.connect(self.host, self.port, 32)
         self.haveData = False
 
-        self.logger.log("-------------- Account --------------")
+        self.logger.log("---------------- Account ----------------")
         self.reqAccountSummary(self.nextId, "All", AccountSummaryTags.AllTags)
         while not self.haveData:
             time.sleep(0.01)
-        self.logger.log("-------------------------------------")
+        self.logger.log("-----------------------------------------")
         self.disconnect()
 
     def get_account_details(self):
@@ -50,7 +52,7 @@ class Portfolio(TwsTool):
         Simply prints out account details
         :return:
         """
-        self.connect("localhost", 4001, 32)
+        self.connect(self.host, self.port, 32)
         self.haveData = False
         self.details = True
 
@@ -68,8 +70,8 @@ class Portfolio(TwsTool):
         :return: list of portfolio entries
         """
 
-        # TODO: Get rid of those hardcoded parameters, use config file instead
-        self.connect("localhost", 4001, 32)
+        # TODO: This hangs on Saturday morning (markets closed) Why?
+        self.connect(self.host, self.port, 32)
 
         self.reqAccountUpdates(True, self.acct)
         while not self.haveData:
@@ -94,7 +96,6 @@ class Portfolio(TwsTool):
 
         self.disconnect()
 
-        # TODO: Create a data frame on the results here
         df1 = pd.DataFrame(columns=["Strike", "Side", "Expiry", "Vol", "Underlying Price", "Mid",
                                     "Position", "Delta", "Gamma", "Theta", "Vega"])
         for i in self.portfolio:
